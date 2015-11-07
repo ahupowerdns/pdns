@@ -40,6 +40,8 @@ BOOST_AUTO_TEST_CASE(test_record_types) {
 
   cases_t cases = boost::assign::list_of
      (CASE_S(QType::A, "127.0.0.1", "\x7F\x00\x00\x01",false))
+// root nameserver
+     (CASE_S(QType::NS, ".", "\x00",false))
 // local nameserver
      (CASE_L(QType::NS, "ns.rec.test.", "ns.rec.test.", "\x02ns\xc0\x11",false))
 // non-local nameserver

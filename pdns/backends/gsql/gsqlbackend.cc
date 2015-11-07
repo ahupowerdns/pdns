@@ -428,12 +428,18 @@ bool GSQLBackend::updateDNSSECOrderNameAndAuth(uint32_t domain_id, const DNSName
 {
   if(!d_dnssecQueries)
     return false;
+  string ordernameS = "";
+  if (!ordername.empty()) {
+    //FIXME400: this really should do something else?
+    if (!ordername.isPartOf(zonename)) return false; /// throw PDNSException(ordername.toString() + " is not part of " + zonename.toString());
+    ordernameS = ordername.makeRelative(zonename).labelReverse().toString(" ", false);
+  }
 
   if (!ordername.empty()) {
     if (qtype == QType::ANY) {
       try {
         d_updateOrderNameAndAuthQuery_stmt->
-          bind("ordername", ordername.makeRelative(zonename).labelReverse().toString(" ", false))->
+          bind("ordername", ordernameS)->
           bind("auth", auth)->
           bind("domain_id", domain_id)->
           bind("qname", qname)->
@@ -446,7 +452,7 @@ bool GSQLBackend::updateDNSSECOrderNameAndAuth(uint32_t domain_id, const DNSName
     } else {
       try {
         d_updateOrderNameAndAuthTypeQuery_stmt->
-          bind("ordername", ordername.makeRelative(zonename).labelReverse().toString(" ", false))->
+          bind("ordername", ordernameS)->
           bind("auth", auth)->
           bind("domain_id", domain_id)->
           bind("qname", qname)->

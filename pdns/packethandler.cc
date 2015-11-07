@@ -341,7 +341,7 @@ vector<DNSResourceRecord> PacketHandler::getBestDNAMESynth(DNSPacket *p, SOAData
       ret.push_back(rr);  // put in the original
       rr.qtype = QType::CNAME;
       rr.qname = prefix + rr.qname;
-      rr.content = (prefix + DNSName(rr.content)).toStringNoDot();
+      rr.content = (prefix + DNSName(rr.content)).toString();
       rr.auth = 0; // don't sign CNAME
       target= DNSName(rr.content);
       ret.push_back(rr); 
@@ -421,7 +421,7 @@ int PacketHandler::doAdditionalProcessingAndDropAA(DNSPacket *p, DNSPacket *r, c
         //        i->d_place=DNSResourceRecord::AUTHORITY; // XXX FIXME
       }
 
-      string content = stripDot(i->content);
+      string content = i->content;
       if(i->qtype == QType::MX || i->qtype == QType::SRV) {
         string::size_type pos = content.find_first_not_of("0123456789");
         if(pos != string::npos)

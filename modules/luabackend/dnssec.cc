@@ -367,12 +367,12 @@ bool LUABackend::getDomainKeys(const DNSName& name, unsigned int kind, std::vect
 	return false;
 
     if(logging)
-	L << Logger::Info << backend_name << "(getDomainKeys) BEGIN name: '" << name << "' kind: '" << kind << endl;
+	L << Logger::Info << backend_name << "(getDomainKeys) BEGIN name: '" << name << "' kind: '" << kind << "'" << endl;
 
     lua_rawgeti(lua, LUA_REGISTRYINDEX, f_lua_getdomainkeys);
 
     lua_pushstring(lua, name.toString().c_str());
-    lua_pushnumber(lua, kind);
+    lua_pushinteger(lua, kind);
 
     if(lua_pcall(lua, 2, 1, f_lua_exec_error) != 0) {
         string e = backend_name + lua_tostring(lua, -1);
@@ -386,9 +386,6 @@ bool LUABackend::getDomainKeys(const DNSName& name, unsigned int kind, std::vect
 
     if (returnedwhat != LUA_TTABLE) {
 	lua_pop(lua, 1);
-	if(logging)
-	    L << Logger::Info << backend_name << "(getDomainKeys) ERROR!" << endl;
-	    
 	return false;
     }
 
@@ -415,6 +412,8 @@ bool LUABackend::getDomainKeys(const DNSName& name, unsigned int kind, std::vect
 
         lua_pop(lua,1);
     }
+
+    lua_pop(lua, 1);
 
     if(logging)
 	L << Logger::Info << backend_name << "(getDomainKeys) END" << endl;
@@ -535,11 +534,14 @@ bool LUABackend::getDomainMetadata(const DNSName& name, const std::string& kind,
         return false;
     }
 
+    if (lua_type(lua, -1) != LUA_TTABLE)
+        return false;
+
     lua_pushnil(lua);  
 
     int j = 0;
     size_t returnedwhat;
-    
+
     while (lua_next(lua, -2)) {
         returnedwhat = lua_type(lua, -1);
         if (returnedwhat == LUA_TSTRING) {
@@ -549,6 +551,8 @@ bool LUABackend::getDomainMetadata(const DNSName& name, const std::string& kind,
 
         lua_pop(lua,1);
     }
+
+    lua_pop(lua, 1);
 
     if(logging)
 	L << Logger::Info << backend_name << "(getDomainMetadata) END" << endl;
@@ -577,6 +581,9 @@ void LUABackend::alsoNotifies(const DNSName& domain, set<string> *ips) {
         return;
     }
 
+    if (lua_type(lua, -1) != LUA_TTABLE)
+        return;
+
     lua_pushnil(lua);  
 
     size_t returnedwhat;
@@ -589,6 +596,8 @@ void LUABackend::alsoNotifies(const DNSName& domain, set<string> *ips) {
 
         lua_pop(lua,1);
     }
+
+    lua_pop(lua, 1);
 
     if(logging)
 	L << Logger::Info << backend_name << "(alsoNotifies) END" << endl;

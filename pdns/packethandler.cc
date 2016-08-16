@@ -415,7 +415,7 @@ int PacketHandler::doAdditionalProcessingAndDropAA(DNSPacket *p, DNSPacket *r, c
           continue;
       }
       else {
-        B.lookup(QType(d_doIPv6AdditionalProcessing ? QType::ANY : QType::A), DNSName(content), p);
+        B.lookup(QType(d_doIPv6AdditionalProcessing ? QType::ANY : QType::A), DNSName(content), p, soadata.domain_id);
       }
       while(B.get(rr)) {
         if(rr.qtype.getCode() != QType::A && rr.qtype.getCode()!=QType::AAAA)

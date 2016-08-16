@@ -334,19 +334,6 @@ void DNSName::trimToLabels(unsigned int to)
     ;
 }
 
-bool DNSName::operator==(const DNSName& rhs) const
-{
-  if(rhs.empty() != empty() || rhs.d_storage.size() != d_storage.size())
-    return false;
-
-  auto us = d_storage.crbegin();
-  auto p = rhs.d_storage.crbegin();
-  for(; us != d_storage.crend() && p != rhs.d_storage.crend(); ++us, ++p) {   // why does this go backward? 
-    if(dns2_tolower(*p) != dns2_tolower(*us))
-      return false;
-  }
-  return true;
-}
 
 size_t hash_value(DNSName const& d)
 {
@@ -369,4 +356,16 @@ string DNSName::escapeLabel(const std::string& label)
     }
   }
   return ret;
+}
+
+
+void reverseCanonic(const unsigned char*p, unsigned char* dest, int& pos)
+{
+  // 3www4ds9a2nl0 -> nl0ds9a0www
+  if(*(p+*p+1)) { // this is not the last label
+    reverseCanonic(p+*p+1, dest, pos); // called with 4ds9a.nl2nl0
+                                       // called with         2nl0  -> end condition
+  }
+  memcpy(dest+pos, p, *p+1);    
+  pos+=*p+1;
 }

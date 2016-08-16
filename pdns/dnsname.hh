@@ -48,7 +48,7 @@ public:
   DNSName(const char* p, int len, int offset, bool uncompress, uint16_t* qtype=0, uint16_t* qclass=0, unsigned int* consumed=0, uint16_t minOffset=0); //!< Construct from a DNS Packet, taking the first question if offset=12
   
   bool isPartOf(const DNSName& rhs) const;   //!< Are we part of the rhs name?
-  bool operator==(const DNSName& rhs) const; //!< DNS-native comparison (case insensitive) - empty compares to empty
+  inline bool operator==(const DNSName& rhs) const; //!< DNS-native comparison (case insensitive) - empty compares to empty
   bool operator!=(const DNSName& other) const { return !(*this == other); }
 
   std::string toString(const std::string& separator=".", const bool trailing=true) const;              //!< Our human-friendly, escaped, representation
@@ -100,7 +100,7 @@ public:
 					}); // note that this is case insensitive, including on the label lengths
   }
 
-  inline bool canonCompare(const DNSName& rhs) const;
+  inline bool canonCompare(const DNSName& rhs) const __attribute__((always_inline));
   bool slowCanonCompare(const DNSName& rhs) const;  
 
 #if BOOST_VERSION >= 104800 && ! defined( __APPLE__ ) && ! defined(__OpenBSD__)
@@ -120,8 +120,15 @@ private:
 size_t hash_value(DNSName const& d);
 
 
-inline bool DNSName::canonCompare(const DNSName& rhs) const
+inline bool DNSName::canonCompare(const DNSName& rhs)  const 
 {
+  std::cout<<"Asked to compare "<<toString()<<" to "<<rhs.toString()<<std::endl;
+  if(rhs.d_storage == d_storage) {
+    //    std::cout<<"Identical domains "<<toString()<<" not smaller!"<<std::endl;
+    return false;
+  }
+  if(isRoot()) // we're not identical, and we are root, thus smaller
+    return true;
   //      01234567890abcd
   // us:  1a3www4ds9a2nl
   // rhs: 3www6online3com
@@ -132,7 +139,7 @@ inline bool DNSName::canonCompare(const DNSName& rhs) const
   
   uint8_t ourpos[64], rhspos[64];
   uint8_t ourcount=0, rhscount=0;
-  //cout<<"Asked to compare "<<toString()<<" to "<<rhs.toString()<<endl;
+  
   for(const unsigned char* p = (const unsigned char*)d_storage.c_str(); p < (const unsigned char*)d_storage.c_str() + d_storage.size() && *p && ourcount < sizeof(ourpos); p+=*p+1)
     ourpos[ourcount++]=(p-(const unsigned char*)d_storage.c_str());
   for(const unsigned char* p = (const unsigned char*)rhs.d_storage.c_str(); p < (const unsigned char*)rhs.d_storage.c_str() + rhs.d_storage.size() && *p && rhscount < sizeof(rhspos); p+=*p+1)
@@ -177,6 +184,21 @@ inline bool DNSName::canonCompare(const DNSName& rhs) const
       return false;
   }
   return false;
+}
+
+bool DNSName::operator==(const DNSName& rhs) const
+{
+  if(rhs.empty() != empty() || rhs.d_storage.size() != d_storage.size())
+    return false;
+  if(rhs.d_storage == d_storage)
+    return true;
+  auto us = d_storage.crbegin();
+  auto p = rhs.d_storage.crbegin();
+  for(; us != d_storage.crend() && p != rhs.d_storage.crend(); ++us, ++p) {   // why does this go backward? 
+    if(dns2_tolower(*p) != dns2_tolower(*us))
+      return false;
+  }
+  return true;
 }
 
 

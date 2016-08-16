@@ -1080,21 +1080,20 @@ void Bind2Backend::lookup(const QType &qtype, const DNSName &qname, DNSPacket *p
   if(d_handle.d_records->empty())
     DLOG(L<<"Query with no results"<<endl);
 
-  pair<recordstorage_t::const_iterator, recordstorage_t::const_iterator> range;
+  auto& qhindex=boost::multi_index::get<HashedQnameTag>(*bbd.d_records.getWRITABLE());
+  auto range=qhindex.equal_range(d_handle.qname);
+  d_handle.d_iter=range.first;
 
-  range = d_handle.d_records->equal_range(d_handle.qname);
-  //cout<<"End equal range"<<endl;
   d_handle.mustlog = mustlog;
   
-  if(range.first==range.second) {
+  if(range.first == range.second) {
     // cerr<<"Found nothing!"<<endl;
     d_handle.d_list=false;
-    d_handle.d_iter = d_handle.d_end_iter  = range.first;
+    d_handle.d_iter = d_handle.d_end_iter;
     return;
   }
   else {
     // cerr<<"Found something!"<<endl;
-    d_handle.d_iter=range.first;
     d_handle.d_end_iter=range.second;
   }
 
@@ -1142,6 +1141,7 @@ void Bind2Backend::handle::reset()
   mustlog=false;
 }
 
+//#undef DLOG
 //#define DLOG(x) x
 bool Bind2Backend::handle::get_normal(DNSResourceRecord &r)
 {
@@ -1164,7 +1164,6 @@ bool Bind2Backend::handle::get_normal(DNSResourceRecord &r)
   r.qname=qname.empty() ? domain : (qname+domain);
   r.domain_id=id;
   r.content=(d_iter)->content;
-  //  r.domain_id=(d_iter)->domain_id;
   r.qtype=(d_iter)->qtype;
   r.ttl=(d_iter)->ttl;
 

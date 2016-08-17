@@ -63,6 +63,15 @@ public:
   std::vector<std::string> getRawLabels() const; //!< Individual raw unescaped labels
   bool chopOff();                               //!< Turn www.powerdns.com. into powerdns.com., returns false for .
   DNSName makeRelative(const DNSName& zone) const;
+  DNSName makeLowerCase() const
+  {
+    DNSName ret;
+    ret.d_storage = d_storage;
+    for(auto & c : ret.d_storage) {
+      c=dns2_tolower(c);
+    }
+    return ret;
+  }
   void makeUsRelative(const DNSName& zone);
   DNSName labelReverse() const;
   bool isWildcard() const;
@@ -122,7 +131,11 @@ size_t hash_value(DNSName const& d);
 
 inline bool DNSName::canonCompare(const DNSName& rhs)  const 
 {
+<<<<<<< Updated upstream
   std::cout<<"Asked to compare "<<toString()<<" to "<<rhs.toString()<<std::endl;
+=======
+  //  std::cout<<"Asked to compare "<<toString()<<" to "<<rhs.toString()<<std::endl;
+>>>>>>> Stashed changes
   if(rhs.d_storage == d_storage) {
     //    std::cout<<"Identical domains "<<toString()<<" not smaller!"<<std::endl;
     return false;

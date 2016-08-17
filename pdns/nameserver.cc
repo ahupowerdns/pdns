@@ -22,6 +22,7 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
+// #include "malloctrace.hh"
 #include "utility.hh"
 #include <cstdio>
 #include <cstring>
@@ -301,6 +302,7 @@ void UDPNameserver::send(DNSPacket *p)
   }
   if(sendmsg(p->getSocket(), &msgh, 0) < 0)
     L<<Logger::Error<<"Error sending reply with sendmsg (socket="<<p->getSocket()<<", dest="<<p->d_remote.toStringWithPort()<<"): "<<strerror(errno)<<endl;
+  //  cerr<<g_mtracer->topAllocatorsString(100)<<endl;
 }
 
 DNSPacket *UDPNameserver::receive(DNSPacket *prefilled)
@@ -348,7 +350,8 @@ DNSPacket *UDPNameserver::receive(DNSPacket *prefilled)
   }
   if(sock==-1)
     throw PDNSException("poll betrayed us! (should not happen)");
-  
+  //  g_mtracer->clearAllocators();
+
   DLOG(L<<"Received a packet " << len <<" bytes long from "<< remote.toString()<<endl);
 
   BOOST_STATIC_ASSERT(offsetof(sockaddr_in, sin_port) == offsetof(sockaddr_in6, sin6_port));

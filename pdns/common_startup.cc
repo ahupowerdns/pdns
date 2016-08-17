@@ -28,7 +28,7 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include "dynhandler.hh"
-
+#include "malloctrace.hh"
 #ifdef HAVE_SYSTEMD
 #include <systemd/sd-daemon.h>
 #endif

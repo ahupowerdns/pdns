@@ -270,6 +270,7 @@ void DNSPacketWriter::xfrName(const DNSName& name, bool compress, bool)
     if(li==d_labelmap.end() && pos< 16384) {
       //      cerr<<"\tStoring a compression pointer to '"<<chopped<<"': "<<pos<<endl;
       d_labelmap.push_back(make_pair(towrite, pos));                       //  if untrue, we need to count - also, don't store offsets > 16384, won't work
+      //      cerr<<"Now stored "<<d_labelmap.size()<<" labels"<<endl;
       //cerr<<"stored ["<<towrite.toString()<<"] at pos "<<pos<<endl;
     }
 

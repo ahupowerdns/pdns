@@ -466,6 +466,7 @@ void Bind2Backend::parseZoneFile(BB2DomainInfo *bbd)
   bbd->d_loaded=true; 
   bbd->d_checknow=false;
   bbd->d_status="parsed into memory at "+nowTime();
+  cout<<"Load factor: "<<boost::multi_index::get<HashedQnameTag>(*bbd->d_records.getWRITABLE()).load_factor()<<endl;
 }
 
 /** THIS IS AN INTERNAL FUNCTION! It does moadnsparser prio impedance matching

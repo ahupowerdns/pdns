@@ -1110,6 +1110,8 @@ bool PacketHandler::tryWildcard(DNSPacket *p, DNSPacket*r, SOAData& sd, DNSName 
 //! Called by the Distributor to ask a question. Returns 0 in case of an error
 DNSPacket *PacketHandler::questionOrRecurse(DNSPacket *p, bool *shouldRecurse)
 {
+  DTime dt;
+
   *shouldRecurse=false;
   DNSResourceRecord rr;
   SOAData sd;
@@ -1491,6 +1493,7 @@ DNSPacket *PacketHandler::questionOrRecurse(DNSPacket *p, bool *shouldRecurse)
     }
     
   sendit:;
+
     if(doAdditionalProcessingAndDropAA(p, r, sd, retargetcount)<0) {
       delete r;
       return 0;
@@ -1510,6 +1513,7 @@ DNSPacket *PacketHandler::questionOrRecurse(DNSPacket *p, bool *shouldRecurse)
     r->wrapup(); // needed for inserting in cache
     if(!noCache)
       PC.insert(p, r, false, r->getMinTTL()); // in the packet cache
+    //    cout<<"Packaging of answer took "<<dt.udiff()<<endl;
   }
   catch(DBException &e) {
     L<<Logger::Error<<"Backend reported condition which prevented lookup ("+e.reason+") sending out servfail"<<endl;

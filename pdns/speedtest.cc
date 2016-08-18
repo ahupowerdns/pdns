@@ -4,16 +4,16 @@
 #include "misc.hh"
 #include "dnswriter.hh"
 #include "dnsrecords.hh"
+#include <fstream>
 #include <boost/format.hpp>
 #ifndef RECURSOR
 #include "statbag.hh"
 #include "base64.hh"
 StatBag S;
 #endif
-
+#include <boost/container/string.hpp>
 volatile bool g_ret; // make sure the optimizer does not get too smart
 uint64_t g_totalRuns;
-
 volatile bool g_stop;
 
 void alarmHandler(int)
@@ -174,6 +174,23 @@ struct StringAppendTest
   void operator()() const 
   {
     string str;
+    static char i;
+    for(int n=0; n < 1000; ++n)
+      str.append(1, i);
+    i++; 
+  }
+};
+
+struct BoostStringAppendTest
+{
+  string getName() const
+  {
+    return "booststringappend";
+  }
+  
+  void operator()() const 
+  {
+    boost::container::string str;
     static char i;
     for(int n=0; n < 1000; ++n)
       str.append(1, i);
@@ -380,6 +397,101 @@ vector<uint8_t> makeTypicalReferral()
   return  packet;
 }
 
+
+
+vector<uint8_t> makeBigReferral()
+{
+
+  vector<uint8_t> packet;
+  DNSPacketWriter pw(packet, DNSName("www.google.com"), QType::A);
+
+  string gtld="x.gtld-servers.net";
+  for(char c='a'; c<= 'm';++c) {
+    pw.startRecord(DNSName("com"), QType::NS, 3600, 1, DNSResourceRecord::AUTHORITY);
+    gtld[0]=c;
+    DNSRecordContent* drc = DNSRecordContent::mastermake(QType::NS, 1, gtld);
+    drc->toPacket(pw);
+    delete drc;
+  }
+
+  for(char c='a'; c<= 'k';++c) {
+    gtld[0]=c;
+    pw.startRecord(DNSName(gtld), QType::A, 3600, 1, DNSResourceRecord::ADDITIONAL);
+    DNSRecordContent* drc = DNSRecordContent::mastermake(QType::A, 1, "1.2.3.4");
+    drc->toPacket(pw);
+    delete drc;
+  }
+
+
+  pw.startRecord(DNSName("a.gtld-servers.net"), QType::AAAA, 3600, 1, DNSResourceRecord::ADDITIONAL);
+  auto aaaarc = DNSRecordContent::mastermake(QType::AAAA, 1, "2001:503:a83e::2:30");
+  aaaarc->toPacket(pw);
+  delete aaaarc;
+
+  pw.startRecord(DNSName("b.gtld-servers.net"), QType::AAAA, 3600, 1, DNSResourceRecord::ADDITIONAL);
+  aaaarc = DNSRecordContent::mastermake(QType::AAAA, 1, "2001:503:231d::2:30");
+  aaaarc->toPacket(pw);
+  delete aaaarc;
+
+
+  pw.commit();
+  return  packet;
+}
+
+
+
+vector<uint8_t> makeBigDNSPacketReferral()
+{
+  vector<DNSResourceRecord> records;
+  DNSResourceRecord rr;
+  rr.qtype = QType::NS;
+  rr.ttl=3600;
+  rr.qname=DNSName("com");
+  rr.d_place = DNSResourceRecord::ADDITIONAL;
+
+  string gtld="x.gtld-servers.net";
+  for(char c='a'; c<= 'm';++c) {
+    gtld[0]=c;
+    rr.content = gtld;
+    records.push_back(rr);
+  }
+
+  rr.qtype = QType::A;
+  for(char c='a'; c<= 'k';++c) {
+    gtld[0]=c;
+    rr.qname=DNSName(gtld);
+    rr.content="1.2.3.4";
+    records.push_back(rr);
+  }
+
+  rr.qname=DNSName("a.gtld-servers.net");
+  rr.qtype=QType::AAAA;
+  rr.content="2001:503:a83e::2:30";
+  records.push_back(rr);
+
+  rr.qname=DNSName("b.gtld-servers.net");
+  rr.qtype=QType::AAAA;
+  rr.content="2001:503:231d::2:30";
+  records.push_back(rr);
+
+
+  vector<uint8_t> packet;
+  DNSPacketWriter pw(packet, DNSName("www.google.com"), QType::A);
+  shuffle(records);
+  for(const auto& rec : records) {
+    pw.startRecord(rec.qname, rec.qtype.getCode(), rec.ttl, 1, rec.d_place);
+    auto drc = DNSRecordContent::mastermake(rec.qtype.getCode(), 1, rec.content);
+    drc->toPacket(pw);
+    delete drc;
+  }
+
+  pw.commit();
+  return  packet;
+}
+
+
+
+
 struct StackMallocTest
 {
   string getName() const
@@ -423,6 +535,35 @@ struct TypicalRefTest
   }
 
 };
+
+struct BigRefTest
+{
+  string getName() const
+  {
+    return "write big referral";
+  }
+
+  void operator()() const
+  {
+    vector<uint8_t> packet=makeBigReferral();
+  }
+
+};
+
+struct BigDNSPacketRefTest
+{
+  string getName() const
+  {
+    return "write big dnspacket referral";
+  }
+
+  void operator()() const
+  {
+    vector<uint8_t> packet=makeBigDNSPacketReferral();
+  }
+
+};
+
 
 struct TCacheComp
 {
@@ -673,7 +814,7 @@ int main(int argc, char** argv)
 try
 {
   reportAllTypes();
-
+  /*
   doRun(NOPTest());
 
   doRun(IEqualsTest());
@@ -686,13 +827,31 @@ try
 
   doRun(EmptyQueryTest());
   doRun(TypicalRefTest());
+  */
+  doRun(BigDNSPacketRefTest(),1000);
+  doRun(BigRefTest(),1000);
 
 
   auto packet = makeEmptyQuery();
   doRun(ParsePacketTest(packet, "empty-query"));
-
+  
   packet = makeTypicalReferral();
   cerr<<"typical referral size: "<<packet.size()<<endl;
+
+  packet = makeBigReferral();
+  cerr<<"big referral size: "<<packet.size()<<endl;
+  {
+    ofstream fpacket("packet");
+    fpacket<< string((char*)&packet[0], (char*)(&packet[0] + packet.size()));
+  }
+
+  packet = makeBigDNSPacketReferral();
+  cerr<<"big dnspacket referral size: "<<packet.size()<<endl;
+  {
+    ofstream fpacket("packet");
+    fpacket<< string((char*)&packet[0], (char*)(&packet[0] + packet.size()));
+  }
+  /*
   doRun(ParsePacketBareTest(packet, "typical-referral"));
 
   doRun(ParsePacketTest(packet, "typical-referral"));
@@ -746,10 +905,11 @@ try
   doRun(StringtokTest());
   doRun(VStringtokTest());  
   doRun(StringAppendTest());  
+  doRun(BoostStringAppendTest());  
 
   doRun(DNSNameParseTest());
   doRun(DNSNameRootTest());
-
+  */
   cerr<<"Total runs: " << g_totalRuns<<endl;
 
 }

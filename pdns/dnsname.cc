@@ -334,19 +334,6 @@ void DNSName::trimToLabels(unsigned int to)
     ;
 }
 
-bool DNSName::operator==(const DNSName& rhs) const
-{
-  if(rhs.empty() != empty() || rhs.d_storage.size() != d_storage.size())
-    return false;
-
-  auto us = d_storage.crbegin();
-  auto p = rhs.d_storage.crbegin();
-  for(; us != d_storage.crend() && p != rhs.d_storage.crend(); ++us, ++p) {   // why does this go backward? 
-    if(dns2_tolower(*p) != dns2_tolower(*us))
-      return false;
-  }
-  return true;
-}
 
 size_t hash_value(DNSName const& d)
 {

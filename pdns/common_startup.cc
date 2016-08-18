@@ -324,6 +324,7 @@ int isGuarded(char **argv)
   return !!p;
 }
 
+static int g_counter;
 void sendout(DNSPacket* a)
 {
   if(!a)
@@ -332,6 +333,7 @@ void sendout(DNSPacket* a)
   N->send(a);
 
   int diff=a->d_dt.udiff();
+  cout<<g_counter++<<"\t"<<diff<<" usec"<<endl;
   avg_latency=(int)(0.999*avg_latency+0.001*diff);
   delete a;  
 }
@@ -389,7 +391,7 @@ void *qthread(void *number)
      if(P->d.qr)
        continue;
 
-    S.ringAccount("queries", P->qdomain.toLogString()+"/"+P->qtype.getName());
+     // S.ringAccount("queries", P->qdomain.toLogString()+"/"+P->qtype.getName());
     S.ringAccount("remotes",P->d_remote);
     if(logDNSQueries) {
       string remote;

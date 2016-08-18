@@ -43,6 +43,7 @@ StatBag::StatBag()
 
 void StatBag::exists(const string &key)
 {
+  //  cout<<"Called for lookup for "<<key<<endl;
   if(!d_keyDescrips.count(key))
     {
       throw PDNSException("Trying to deposit into unknown StatBag key '"+key+"'");
@@ -149,6 +150,7 @@ string StatBag::getValueStrZero(const string &key)
 
 AtomicCounter *StatBag::getPointer(const string &key)
 {
+  //  cout<<"Called for lookup for "<<key<<endl;
   exists(key);
   return d_stats[key];
 }
@@ -175,6 +177,7 @@ template<typename T, typename Comp>
 void StatRing<T,Comp>::account(const T& t)
 {
   Lock l(&d_lock);
+  cout<<"Deposited something"<<endl;
   d_items.push_back(t);
 }
 

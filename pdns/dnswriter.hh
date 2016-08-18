@@ -8,6 +8,7 @@
 #include "dnsname.hh"
 #include "namespaces.hh"
 #include <arpa/inet.h>
+#include "suffixmatchtree.hh"
 /** this class can be used to write DNS packets. It knows about DNS in the sense that it makes
     the packet header and record headers.
 
@@ -38,8 +39,6 @@ class DNSPacketWriter : public boost::noncopyable
 {
 
 public:
-  typedef vector<pair<DNSName, uint16_t> > lmap_t;
-
   //! Start a DNS Packet in the vector passed, with question qname, qtype and qclass
   DNSPacketWriter(vector<uint8_t>& content, const DNSName& qname, uint16_t  qtype, uint16_t qclass=QClass::IN, uint8_t opcode=0);
 
@@ -124,7 +123,7 @@ private:
   vector <uint8_t> d_record;
   DNSName d_qname;
   DNSName d_recordqname;
-  lmap_t d_labelmap;
+  SuffixMatchTree<uint16_t> d_labelmap;
 
   uint32_t d_recordttl;
   uint16_t d_recordqtype, d_recordqclass;

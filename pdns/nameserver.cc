@@ -370,13 +370,14 @@ DNSPacket *UDPNameserver::receive(DNSPacket *prefilled)
 //    cerr<<"Setting d_anyLocal to '"<<dest.toString()<<"'"<<endl;
     packet->d_anyLocal = dest;
   }            
-
+  /*
   struct timeval recvtv;
   if(HarvestTimestamp(&msgh, &recvtv)) {
     packet->d_dt.setTimeval(recvtv);
   }
-  else
-    packet->d_dt.set(); // timing    
+  else */
+  packet->d_dt.set(); // timing    
+
 
   if(packet->parse(mesg, (size_t) len)<0) {
     S.inc("corrupt-packets");
@@ -386,6 +387,6 @@ DNSPacket *UDPNameserver::receive(DNSPacket *prefilled)
       delete packet;
     return 0; // unable to parse
   }
-  
+
   return packet;
 }

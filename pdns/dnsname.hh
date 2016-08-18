@@ -35,7 +35,7 @@ uint32_t burtleCI(const unsigned char* k, uint32_t lengh, uint32_t init);
 inline char dns2_tolower(char c)
 {
   if(c>='A' && c<='Z')
-    c+='a'-'A';
+    return c+('a'-'A');
   return c;
 }
 
@@ -48,7 +48,7 @@ public:
   DNSName(const char* p, int len, int offset, bool uncompress, uint16_t* qtype=0, uint16_t* qclass=0, unsigned int* consumed=0, uint16_t minOffset=0); //!< Construct from a DNS Packet, taking the first question if offset=12
   
   bool isPartOf(const DNSName& rhs) const;   //!< Are we part of the rhs name?
-  bool operator==(const DNSName& rhs) const; //!< DNS-native comparison (case insensitive) - empty compares to empty
+  inline bool operator==(const DNSName& rhs) const; //!< DNS-native comparison (case insensitive) - empty compares to empty
   bool operator!=(const DNSName& other) const { return !(*this == other); }
 
   std::string toString(const std::string& separator=".", const bool trailing=true) const;              //!< Our human-friendly, escaped, representation
@@ -278,3 +278,16 @@ namespace std {
 }
 
 DNSName::string_t segmentDNSNameRaw(const char* input); // from ragel
+bool DNSName::operator==(const DNSName& rhs) const
+{
+  if(rhs.empty() != empty() || rhs.d_storage.size() != d_storage.size())
+    return false;
+
+  auto us = d_storage.cbegin();
+  auto p = rhs.d_storage.cbegin();
+  for(; us != d_storage.cend() && p != rhs.d_storage.cend(); ++us, ++p) {   // why does this go backward? 
+    if(dns2_tolower(*p) != dns2_tolower(*us))
+      return false;
+  }
+  return true;
+}

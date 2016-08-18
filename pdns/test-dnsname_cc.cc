@@ -344,6 +344,7 @@ BOOST_AUTO_TEST_CASE(test_QuestionHash) {
   
 
 BOOST_AUTO_TEST_CASE(test_packetParse) {
+  cout<<"!"<<endl;
   vector<unsigned char> packet;
   reportBasicTypes();
   DNSPacketWriter dpw(packet, DNSName("www.ds9a.nl."), QType::AAAA);

@@ -178,8 +178,8 @@ public:
   virtual string serialize(const DNSName& qname, bool canonic=false, bool lowerCase=false) // it would rock if this were const, but it is too hard
   {
     vector<uint8_t> packet;
-    DNSName empty;
-    DNSPacketWriter pw(packet, empty, 1);
+    DNSName root(".");
+    DNSPacketWriter pw(packet, root, 1);
     if(canonic)
       pw.setCanonic(true);
 

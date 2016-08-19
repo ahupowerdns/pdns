@@ -185,6 +185,7 @@ void DNSPacketWriter::xfrUnquotedText(const string& text, bool lenField)
 }
 
 
+static bool l_verbose=false;
 uint16_t DNSPacketWriter::lookupName(const DNSName& name, uint16_t* matchLen)
 {
   // iterate over the written labels, see if we find a match
@@ -196,33 +197,50 @@ uint16_t DNSPacketWriter::lookupName(const DNSName& name, uint16_t* matchLen)
   */
   unsigned int bestpos=0;
   *matchLen=0;
-  for(const auto& p : d_positions) {
-    if(!memcmp(raw.c_str(), &d_content[0] + p, raw.size())) {
-      *matchLen=raw.size();
-      return p;
-    }
-    boost::container::static_vector<uint16_t, 34> nvect, pvect;
-    for(auto riter= raw.cbegin(); riter < raw.cend(); ) {
-      if(!*riter)
-        break;
-      nvect.push_back(riter - raw.cbegin());
-      riter+=*riter+1;
-    }
+  if(l_verbose)
+    cout<<"Have "<<d_positions.size()<<" to ponder"<<endl;
+  boost::container::static_vector<uint16_t, 34> nvect;
 
-    /*    cout<<"Input vector for "<<name<<": ";
+  for(auto riter= raw.cbegin(); riter < raw.cend(); ) {
+    if(!*riter)
+      break;
+    nvect.push_back(riter - raw.cbegin());
+    riter+=*riter+1;
+  }
+  
+  if(l_verbose) {
+    cout<<"Input vector for lookup "<<name<<": ";
     for(const auto n : nvect) 
       cout << n<<" ";
     cout<<endl;
     cout<<makeHexDump(string(raw.c_str(), raw.c_str()+raw.size()))<<endl;
-    */
+  }
+  
+  for(const auto& p : d_positions) {
+    if(l_verbose) {
+      DNSName pname((const char*)&d_content[0], d_content.size(), p, true); // only for debugging
+      cout<<"Looking at '"<<pname<<"' in packet"<<endl;
+    }
+
+    if(!memcmp(raw.c_str(), &d_content[0] + p, raw.size())) {
+      if(l_verbose) 
+        cout<<"Found memcmp based match!"<<endl;
+      *matchLen=raw.size();
+      return p;
+    }
+    boost::container::static_vector<uint16_t, 34> pvect;
+
     for(auto iter = d_content.cbegin() + p; iter < d_content.cend();) {
+
       uint8_t c=*iter;
-      //      cout<<"Found label length: "<<(int)c<<endl;
+      if(l_verbose)
+        cout<<"Found label length: "<<(int)c<<endl;
       if(c & 0xc0) {
 
         uint16_t npos = 0x100*(c & (~0xc0)) + *++iter;
         iter = d_content.begin() + npos;
-        //        cout<<"Is compressed label to newpos "<<npos<<", going there"<<endl;
+        if(l_verbose)
+          cout<<"Is compressed label to newpos "<<npos<<", going there"<<endl;
         // check against going forward here
         continue;
       }
@@ -231,24 +249,33 @@ uint16_t DNSPacketWriter::lookupName(const DNSName& name, uint16_t* matchLen)
       pvect.push_back(iter - d_content.cbegin());
       iter+=*iter+1;
     }
-    /*
-    DNSName pname((const char*)&d_content[0], d_content.size(), p, true); // only for debugging
-    cout<<"Packet vector for "<<pname<<": ";
-    for(const auto n : pvect) 
-      cout << n<<" ";
-    cout<<endl;
-    */
+    if(l_verbose) {
+      cout<<"Packet vector: "<<endl;
+      for(const auto n : pvect) 
+        cout << n<<" ";
+      cout<<endl;
+    }
     auto niter=nvect.crbegin(), piter=pvect.crbegin();
     unsigned int cmatchlen=1;
     for(; niter != nvect.crend() && piter != pvect.crend(); ++niter, ++piter) {
       // niter is an offset in raw, pvect an offset in packet
       uint8_t nlen = raw[*niter], plen=d_content[*piter];
-      //      cout<<"nlnen="<<(int)nlen<<", plen="<<(int)plen<<endl;
+      if(l_verbose)
+        cout<<"nlnen="<<(int)nlen<<", plen="<<(int)plen<<endl;
       if(nlen != plen)
         break;
-      if(strncmp(raw.c_str()+*niter, (const char*)&d_content[*piter], nlen))
+      if(strncasecmp(raw.c_str()+*niter+1, (const char*)&d_content[*piter]+1, nlen)) {
+        if(l_verbose)
+          cout<<"Mismatch: "<<string(raw.c_str()+*niter+1, raw.c_str()+*niter+nlen+1)<< " != "<<string((const char*)&d_content[*piter]+1, (const char*)&d_content[*piter]+nlen+1)<<endl;
         break;
+      }
       cmatchlen+=nlen+1;
+      if(cmatchlen == raw.length()) { // have matched all of it, can't improve
+        if(l_verbose)
+          cout<<"Stopping search, matched whole name"<<endl;
+        *matchLen = cmatchlen;
+        return *piter;
+      }
     }
     if(piter != pvect.crbegin() && *matchLen < cmatchlen) {
       *matchLen = cmatchlen;
@@ -261,7 +288,8 @@ uint16_t DNSPacketWriter::lookupName(const DNSName& name, uint16_t* matchLen)
 // this is the absolute hottest function in the pdns recursor
 void DNSPacketWriter::xfrName(const DNSName& name, bool compress, bool)
 {
-  //  cout<<"Wants to write "<<name<<", compress="<<compress<<", canonic="<<d_canonic<<", LC="<<d_lowerCase<<endl;
+  if(l_verbose)
+    cout<<"Wants to write "<<name<<", compress="<<compress<<", canonic="<<d_canonic<<", LC="<<d_lowerCase<<endl;
   if(d_canonic)
     compress=false;
 
@@ -279,15 +307,19 @@ void DNSPacketWriter::xfrName(const DNSName& name, bool compress, bool)
   uint16_t matchlen=0;
   if(compress && (li=lookupName(name, &matchlen))) {
     const auto& dns=name.getStorage(); 
-    //    cout<<"Found a substring of "<<matchlen<<" bytes from the back, offset: "<<li<<endl;
+    if(l_verbose)
+      cout<<"Found a substring of "<<matchlen<<" bytes from the back, offset: "<<li<<", dnslen: "<<dns.size()<<endl;
     // found a substring, if www.powerdns.com matched powerdns.com, we get back matchlen = 13
 
     unsigned int pos=d_content.size() + d_record.size() + d_stuff;  
-    if(pos < 16384) {
+    if(pos < 16384 && matchlen != dns.size()) {
+      if(l_verbose)
+        cout<<"Inserting pos "<<pos<<" for "<<name<<" for compressed case"<<endl;
       d_positions.push_back(pos);
     }
 
-    //    cout<<"Going to write unique part: "<<makeHexDump(string(dns.c_str(), dns.c_str() + dns.size() - matchlen)) <<endl;
+    if(l_verbose)
+      cout<<"Going to write unique part: '"<<makeHexDump(string(dns.c_str(), dns.c_str() + dns.size() - matchlen)) <<"'"<<endl;
     d_record.insert(d_record.end(), (const unsigned char*)dns.c_str(), (const unsigned char*)dns.c_str() + dns.size() - matchlen);
     uint16_t offset=li;
     offset|=0xc000;
@@ -298,15 +330,18 @@ void DNSPacketWriter::xfrName(const DNSName& name, bool compress, bool)
   else {
 
     unsigned int pos=d_content.size() + d_record.size() + d_stuff;
-    //    cout<<"Found nothing, we are at pos "<<pos<<", inserting whole name"<<endl;
+    if(l_verbose)
+      cout<<"Found nothing, we are at pos "<<pos<<", inserting whole name"<<endl;
     if(pos < 16384) {
-      //      cout<<"Inserted "<<pos<<endl;
+      if(l_verbose)
+        cout<<"Inserting pos "<<pos<<" for "<<name<<" for uncompressed case"<<endl;
       d_positions.push_back(pos);
     }
     
 
     auto& raw = name.getStorage();
-    //    cout<<"Writing out the whole thing "<<makeHexDump(string(raw.c_str(),  raw.c_str() + raw.length()))<<endl;
+    if(l_verbose)
+      cout<<"Writing out the whole thing "<<makeHexDump(string(raw.c_str(),  raw.c_str() + raw.length()))<<endl;
     d_record.insert(d_record.end(), raw.c_str(), raw.c_str() + raw.size());
   }
 }

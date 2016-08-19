@@ -828,29 +828,30 @@ try
   doRun(EmptyQueryTest());
   doRun(TypicalRefTest());
   */
-  doRun(BigDNSPacketRefTest(),1000);
+  //doRun(BigDNSPacketRefTest(),1000);
+    
   doRun(BigRefTest(),1000);
-
-
-  auto packet = makeEmptyQuery();
-  doRun(ParsePacketTest(packet, "empty-query"));
   
-  packet = makeTypicalReferral();
-  cerr<<"typical referral size: "<<packet.size()<<endl;
+  //  auto packet = makeEmptyQuery();
+  //  doRun(ParsePacketTest(packet, "empty-query"));
+  
+  //packet = makeTypicalReferral();
+  //cerr<<"typical referral size: "<<packet.size()<<endl;
 
-  packet = makeBigReferral();
+  auto packet = makeBigReferral();
   cerr<<"big referral size: "<<packet.size()<<endl;
   {
     ofstream fpacket("packet");
     fpacket<< string((char*)&packet[0], (char*)(&packet[0] + packet.size()));
   }
-
+  /*
   packet = makeBigDNSPacketReferral();
   cerr<<"big dnspacket referral size: "<<packet.size()<<endl;
   {
     ofstream fpacket("packet");
     fpacket<< string((char*)&packet[0], (char*)(&packet[0] + packet.size()));
   }
+  */
   /*
   doRun(ParsePacketBareTest(packet, "typical-referral"));
 

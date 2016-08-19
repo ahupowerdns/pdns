@@ -117,7 +117,9 @@ public:
 #else
   typedef std::string string_t;
 #endif
-
+  const string_t& getStorage() const {
+    return d_storage;
+  }
 private:
   string_t d_storage;
 

@@ -8,7 +8,8 @@
 #include "dnsname.hh"
 #include "namespaces.hh"
 #include <arpa/inet.h>
-#include "suffixmatchtree.hh"
+
+
 /** this class can be used to write DNS packets. It knows about DNS in the sense that it makes
     the packet header and record headers.
 
@@ -114,6 +115,8 @@ public:
   bool eof() { return true; } // we don't know how long the record should be
 
 private:
+  uint16_t lookupName(const DNSName& name, uint16_t* matchlen);
+  vector<uint16_t> d_positions;
   // We declare 1 uint_16 in the public section, these 3 align on a 8-byte boundry
   uint16_t d_stuff;
   uint16_t d_sor;
@@ -123,7 +126,6 @@ private:
   vector <uint8_t> d_record;
   DNSName d_qname;
   DNSName d_recordqname;
-  SuffixMatchTree<uint16_t> d_labelmap;
 
   uint32_t d_recordttl;
   uint16_t d_recordqtype, d_recordqclass;

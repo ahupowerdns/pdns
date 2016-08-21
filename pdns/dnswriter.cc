@@ -25,7 +25,7 @@ DNSPacketWriter::DNSPacketWriter(vector<uint8_t>& content, const DNSName& qname,
 
   memcpy(dptr, ptr, sizeof(dnsheader));
   d_stuff=0;
-
+  d_positions.reserve(16);
   xfrName(qname, false);
 
   len=d_content.size();
@@ -185,7 +185,7 @@ void DNSPacketWriter::xfrUnquotedText(const string& text, bool lenField)
 }
 
 
-static bool l_verbose=false;
+static constexpr bool l_verbose=false;
 uint16_t DNSPacketWriter::lookupName(const DNSName& name, uint16_t* matchLen)
 {
   // iterate over the written labels, see if we find a match
@@ -197,9 +197,7 @@ uint16_t DNSPacketWriter::lookupName(const DNSName& name, uint16_t* matchLen)
   */
   unsigned int bestpos=0;
   *matchLen=0;
-  if(l_verbose)
-    cout<<"Have "<<d_positions.size()<<" to ponder"<<endl;
-  boost::container::static_vector<uint16_t, 34> nvect;
+  boost::container::static_vector<uint16_t, 34> nvect, pvect;
 
   for(auto riter= raw.cbegin(); riter < raw.cend(); ) {
     if(!*riter)
@@ -215,21 +213,25 @@ uint16_t DNSPacketWriter::lookupName(const DNSName& name, uint16_t* matchLen)
     cout<<endl;
     cout<<makeHexDump(string(raw.c_str(), raw.c_str()+raw.size()))<<endl;
   }
-  
+
+  if(l_verbose)
+    cout<<"Have "<<d_positions.size()<<" to ponder"<<endl;
+  int counter=1;
   for(const auto& p : d_positions) {
     if(l_verbose) {
       DNSName pname((const char*)&d_content[0], d_content.size(), p, true); // only for debugging
-      cout<<"Looking at '"<<pname<<"' in packet"<<endl;
+      cout<<"Looking at '"<<pname<<"' in packet, "<<counter<<"/"<<d_positions.size()<<endl;
+      ++counter;
     }
-
+    /*
     if(!memcmp(raw.c_str(), &d_content[0] + p, raw.size())) {
       if(l_verbose) 
         cout<<"Found memcmp based match!"<<endl;
       *matchLen=raw.size();
       return p;
     }
-    boost::container::static_vector<uint16_t, 34> pvect;
-
+    */
+    pvect.clear();
     for(auto iter = d_content.cbegin() + p; iter < d_content.cend();) {
 
       uint8_t c=*iter;

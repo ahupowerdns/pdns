@@ -333,7 +333,7 @@ void sendout(DNSPacket* a)
   N->send(a);
 
   int diff=a->d_dt.udiff();
-  cout<<g_counter++<<"\t"<<diff<<" usec"<<endl;
+  //  cout<<g_counter++<<"\t"<<diff<<" usec"<<endl;
   avg_latency=(int)(0.999*avg_latency+0.001*diff);
   delete a;  
 }

@@ -5,7 +5,7 @@
 #include "dnspcap.hh"
 #include <boost/format.hpp>
 #include <fcntl.h>
-
+#include <sys/stat.h>
 #include "namespaces.hh"
 PcapPacketReader::PcapPacketReader(const string& fname) : d_fname(fname)
 {
@@ -153,6 +153,14 @@ ComboAddress PcapPacketReader::getDest() const
     ret.sin6.sin6_port = d_udp->uh_dport; // should deal with TCP too!
   }
   return ret;
+}
+
+double PcapPacketReader::getPercentage()
+{
+  auto pos=ftell(d_fp);
+  struct stat stbuf;
+  fstat(fileno(d_fp), &stbuf);
+  return pos*100.0/stbuf.st_size;
 }
 
 PcapPacketWriter::PcapPacketWriter(const string& fname, const PcapPacketReader& ppr) : PcapPacketWriter(fname)

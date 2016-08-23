@@ -99,6 +99,7 @@ public:
   pdns_pcap_file_header d_pfh;
   unsigned int d_runts, d_oversized, d_correctpackets, d_nonetheripudp;
   char d_buffer[32768];
+  double getPercentage();
 private:
   FILE* d_fp;
   string d_fname;

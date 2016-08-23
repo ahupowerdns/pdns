@@ -82,6 +82,7 @@ bin_PROGRAMS += \
 	dnsreplay \
 	dnsscan \
 	dnsscope \
+	dnstalkers \
 	dnswasher \
 	dumresp \
 	pdns_notify \
@@ -113,6 +114,7 @@ EXTRA_PROGRAMS = \
 	dnsreplay \
 	dnsscan \
 	dnsscope \
+	dnstalkers \
 	dnstcpbench \
 	dnswasher \
 	dumresp \
@@ -1016,6 +1018,34 @@ dnsgram_LDFLAGS = \
 
 dnsgram_LDADD = \
 	$(LIBCRYPTO_LIBS)
+
+dnstalkers_SOURCES = \
+	base32.cc \
+	base64.cc base64.hh \
+	dnstalkers.cc \
+	dnslabeltext.cc \
+	dnsname.cc dnsname.hh \
+	dnsparser.cc dnsparser.hh \
+	dnspcap.cc dnspcap.hh \
+	dnsrecords.cc \
+	dnswriter.cc dnswriter.hh \
+	logger.cc \
+	misc.cc \
+	nsecrecords.cc \
+	qtype.cc \
+	rcpgenerator.cc rcpgenerator.hh \
+	sillyrecords.cc \
+	statbag.cc \
+	unix_utility.cc \
+	utility.hh
+
+dnstalkers_LDFLAGS = \
+	$(AM_LDFLAGS) \
+	$(LIBCRYPTO_LDFLAGS)
+
+dnstalkers_LDADD = \
+	$(LIBCRYPTO_LIBS)
+
 
 dnsdemog_SOURCES = \
 	base32.cc \

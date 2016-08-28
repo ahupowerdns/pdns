@@ -1319,3 +1319,18 @@ unsigned int pdns_stou(const std::string& str, size_t * idx, int base)
   return static_cast<unsigned int>(result);
 }
 
+unsigned int pdns_stou(const char* str, size_t * idx, int base)
+{
+  if(idx)
+    *idx=0;
+  if (!*str) return 0; // compability
+  char* pos;
+  unsigned long result = std::strtoul(str, &pos, base);
+  if (result > std::numeric_limits<unsigned int>::max()) {
+    throw std::out_of_range("stou");
+  }
+  if(idx)
+    *idx = pos-str;
+  return static_cast<unsigned int>(result);
+}
+

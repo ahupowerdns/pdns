@@ -286,6 +286,7 @@ void DNSPacket::wrapup()
   d_wrapped=true;
 
   vector<uint8_t> packet;
+  packet.reserve(512);
   DNSPacketWriter pw(packet, qdomain, qtype.getCode(), qclass);
 
   pw.getHeader()->rcode=d.rcode;

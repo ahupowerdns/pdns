@@ -22,6 +22,7 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <boost/container/static_vector.hpp>
 #include "utility.hh"
 #include "dnsbackend.hh"
 #include "arguments.hh"
@@ -318,6 +319,12 @@ bool DNSBackend::calculateSOASerial(const DNSName& domain, const SOAData& sd, ti
     return true;
 }
 
+static string makeString(const string& line, const pair<string::size_type, string::size_type>& range)
+{
+  return string(line.c_str() + range.first, range.second - range.first);
+}
+
+
 void fillSOAData(const string &content, SOAData &data)
 {
   // content consists of fields separated by spaces:
@@ -325,31 +332,31 @@ void fillSOAData(const string &content, SOAData &data)
 
   // fill out data with some plausible defaults:
   // 10800 3600 604800 3600
-  vector<string>parts;
-  stringtok(parts,content);
+  boost::container::static_vector<pair<string::size_type, string::size_type>, 8> parts;
+  vstringtok(parts,content);
   int pleft=parts.size();
 
   //  cout<<"'"<<content<<"'"<<endl;
 
   if(pleft)
-    data.nameserver=DNSName(parts[0]);
+    data.nameserver=DNSName(makeString(content, parts[0]));
 
   if(pleft>1) 
-    data.hostmaster=DNSName(attodot(parts[1])); // ahu@ds9a.nl -> ahu.ds9a.nl, piet.puk@ds9a.nl -> piet\.puk.ds9a.nl
+    data.hostmaster=DNSName(makeString(content, parts[1])); // ahu@ds9a.nl -> ahu.ds9a.nl, piet.puk@ds9a.nl -> piet\.puk.ds9a.nl
 
   try {
-    data.serial = pleft > 2 ? pdns_stou(parts[2]) : 0;
+    data.serial = pleft > 2 ? atoi(content.c_str()+parts[2].first) : 0;
 
-    data.refresh = pleft > 3 ? pdns_stou(parts[3])
+    data.refresh = pleft > 3 ? atoi(content.c_str()+parts[3].first)
       : ::arg().asNum("soa-refresh-default");
 
-    data.retry = pleft > 4 ? pdns_stou(parts[4].c_str())
+    data.retry = pleft > 4 ? atoi(content.c_str()+parts[4].first)
       : ::arg().asNum("soa-retry-default");
 
-    data.expire = pleft > 5 ? pdns_stou(parts[5].c_str())
+    data.expire = pleft > 5 ? atoi(content.c_str()+parts[5].first)
       : ::arg().asNum("soa-expire-default");
 
-    data.default_ttl = pleft > 6 ? pdns_stou(parts[6].c_str())
+    data.default_ttl = pleft > 6 ? atoi(content.c_str()+parts[6].first)
       : ::arg().asNum("soa-minimum-ttl");
   }
   catch(const std::out_of_range& oor) {

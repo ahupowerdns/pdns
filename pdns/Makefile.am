@@ -990,7 +990,7 @@ dnsscope_LDFLAGS = \
 
 dnsscope_LDADD = \
 	$(LIBCRYPTO_LIBS) \
-	$(BOOST_PROGRAM_OPTIONS_LIBS)
+	$(BOOST_PROGRAM_OPTIONS_LIBS) -lz
 
 dnsgram_SOURCES = \
 	base32.cc \
@@ -1044,7 +1044,7 @@ dnstalkers_LDFLAGS = \
 	$(LIBCRYPTO_LDFLAGS)
 
 dnstalkers_LDADD = \
-	$(LIBCRYPTO_LIBS)
+	-lz $(LIBCRYPTO_LIBS)
 
 
 dnsdemog_SOURCES = \

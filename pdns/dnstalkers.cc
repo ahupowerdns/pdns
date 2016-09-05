@@ -41,6 +41,7 @@ try
 
   uint64_t count=0;
   for(int n=1 ; n < argc; ++n) {
+    cerr<<"File "<<n<<" out of "<<argc-1<<endl;
     PcapPacketReader pr(argv[n]);
     
     while(pr.getUDPPacket()) {
@@ -87,8 +88,8 @@ try
         cerr.flush();
       }
     }
+    cerr <<"\n";    
   }
-  cerr <<"\n";
   
   vector<pair<FlowStat, pair<ComboAddress,ComboAddress> > > sums;
   for(const auto& p : flowstats)

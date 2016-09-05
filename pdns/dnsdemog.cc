@@ -36,28 +36,26 @@ emap_t ecount;
 int main(int argc, char** argv)
 try
 {
-  cout << "begin;";
   for(int n=1 ; n < argc; ++n) {
+    cout<<argv[n]<<endl;
     PcapPacketReader pr(argv[n]);
     
     Entry entry;
+    ComboAddress addr("181.121.82.249:0"), theirs1, theirs2;;
     while(pr.getUDPPacket()) {
-      if(ntohs(pr.d_udp->uh_dport)==53 &&  pr.d_len > 12) {
+      if((ntohs(pr.d_udp->uh_dport)==53 || ntohs(pr.d_udp->uh_dport)==53) &&   pr.d_len > 12) {
         try {
           dnsheader* dh= (dnsheader*) pr.d_payload;
 
-          if(dh->rd || dh->qr)
+          theirs1=pr.getSource();
+          theirs2=pr.getDest();
+          theirs1.sin4.sin_port = theirs2.sin4.sin_port = 0;
+          if(theirs1 != addr && theirs2 != addr)
             continue;
 
           MOADNSParser mdp((const char*)pr.d_payload, pr.d_len);
 
-          entry.ip = pr.getSource();
-          entry.port = pr.d_udp->uh_sport;
-          entry.id=dh->id;
-
-          cout << "insert into dnsstats (source, port, id, query, qtype, tstampSec, tstampUsec, arcount) values ('" << entry.ip.toString() <<"', "<< ntohs(entry.port) <<", "<< ntohs(dh->id);
-          cout <<", '"<<mdp.d_qname<<"', "<<mdp.d_qtype<<", " << pr.d_pheader.ts.tv_sec <<", " << pr.d_pheader.ts.tv_usec;
-          cout <<", "<< ntohs(dh->arcount) <<");\n";
+          cout <<mdp.d_qname<<"', "<<mdp.d_qtype<<", " << pr.d_pheader.ts.tv_sec <<", " << pr.d_pheader.ts.tv_usec<<" "<<pr.d_len<<endl;
 
         }
         catch(MOADNSException& mde) {

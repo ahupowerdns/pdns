@@ -9,12 +9,9 @@
 #include "namespaces.hh"
 PcapPacketReader::PcapPacketReader(const string& fname) : d_fname(fname)
 {
-  d_fp=fopen(fname.c_str(),"r");
+  d_fp=gzopen(fname.c_str(),"r");
   if(!d_fp)
     unixDie("Unable to open file " + fname);
-  
-  int flags=fcntl(fileno(d_fp),F_GETFL,0);
-  fcntl(fileno(d_fp), F_SETFL,flags&(~O_NONBLOCK)); // bsd needs this in stdin (??)
   
   checkedFread(&d_pfh);
   
@@ -37,13 +34,13 @@ PcapPacketReader::PcapPacketReader(const string& fname) : d_fname(fname)
 
 PcapPacketReader::~PcapPacketReader()
 {
-  fclose(d_fp);
+  gzclose(d_fp);
 }
 
 
 void PcapPacketReader::checkedFreadSize(void* ptr, size_t size) 
 {
-  int ret=fread(ptr, 1, size, d_fp);
+  int ret=gzread(d_fp, ptr, size);
   if(ret < 0)
     unixDie( (format("Error reading %d bytes from %s") % size % d_fname).str());
   
@@ -157,10 +154,10 @@ ComboAddress PcapPacketReader::getDest() const
 
 double PcapPacketReader::getPercentage()
 {
-  auto pos=ftell(d_fp);
-  struct stat stbuf;
-  fstat(fileno(d_fp), &stbuf);
-  return pos*100.0/stbuf.st_size;
+ // auto pos=gztell(d_fp);
+  //struct stat stbuf;
+//  fstat(fileno(d_fp), &stbuf);
+  return 0; // pos*100.0/stbuf.st_size;
 }
 
 PcapPacketWriter::PcapPacketWriter(const string& fname, const PcapPacketReader& ppr) : PcapPacketWriter(fname)

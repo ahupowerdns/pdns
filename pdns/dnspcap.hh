@@ -2,6 +2,7 @@
 #define PDNS_DNSPCAP_HH
 
 #include <cstdio>
+#include <zlib.h>
 #include <stdexcept>
 #include "iputils.hh"
 #include <string>
@@ -101,7 +102,7 @@ public:
   char d_buffer[32768];
   double getPercentage();
 private:
-  FILE* d_fp;
+  gzFile d_fp;
   string d_fname;
   int d_skipMediaHeader;
 };

@@ -119,6 +119,7 @@ EXTRA_PROGRAMS = \
 	kvresp \
 	ixplore \
 	pdns_notify \
+	rawudp \
 	nproxy \
 	nsec3dig \
 	saxfr \
@@ -959,6 +960,41 @@ pdns_notify_LDFLAGS = \
 pdns_notify_LDADD = \
 	$(LIBCRYPTO_LIBS) \
 	$(BOOST_PROGRAM_OPTIONS_LIBS)
+
+
+rawudp_SOURCES = \
+	dnsname.cc \
+	dnslabeltext.cc \
+	rawudp.cc \
+	base32.cc \
+	base64.cc base64.hh \
+	dns.cc \
+	dnsparser.cc dnsparser.hh \
+	dnsrecords.cc \
+	dnswriter.cc dnswriter.hh \
+	ednssubnet.cc \
+	logger.cc \
+	misc.cc misc.hh \
+	nsecrecords.cc \
+	qtype.cc \
+	rcpgenerator.cc rcpgenerator.hh \
+	sillyrecords.cc \
+	sstuff.hh \
+	statbag.cc \
+	unix_utility.cc
+
+
+
+
+rawudp_LDFLAGS = \
+	$(AM_LDFLAGS) \
+	$(LIBCRYPTO_LDFLAGS) \
+	$(BOOST_PROGRAM_OPTIONS_LDFLAGS)
+
+rawudp_LDADD = \
+	$(LIBCRYPTO_LIBS) \
+	$(BOOST_PROGRAM_OPTIONS_LIBS)
+
 
 dnsscope_SOURCES = \
 	arguments.cc \

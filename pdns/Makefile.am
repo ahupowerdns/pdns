@@ -119,7 +119,7 @@ EXTRA_PROGRAMS = \
 	kvresp \
 	ixplore \
 	pdns_notify \
-	rawudp \
+	dnsfixer \
 	nproxy \
 	nsec3dig \
 	saxfr \
@@ -962,10 +962,10 @@ pdns_notify_LDADD = \
 	$(BOOST_PROGRAM_OPTIONS_LIBS)
 
 
-rawudp_SOURCES = \
+dnsfixer_SOURCES = \
 	dnsname.cc \
 	dnslabeltext.cc \
-	rawudp.cc \
+	dnsfixer.cc \
 	base32.cc \
 	base64.cc base64.hh \
 	dns.cc \
@@ -986,12 +986,12 @@ rawudp_SOURCES = \
 
 
 
-rawudp_LDFLAGS = \
+dnsfixer_LDFLAGS = \
 	$(AM_LDFLAGS) \
 	$(LIBCRYPTO_LDFLAGS) \
 	$(BOOST_PROGRAM_OPTIONS_LDFLAGS)
 
-rawudp_LDADD = \
+dnsfixer_LDADD = \
 	$(LIBCRYPTO_LIBS) \
 	$(BOOST_PROGRAM_OPTIONS_LIBS)
 

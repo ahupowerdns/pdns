@@ -1,4 +1,4 @@
-#include "rawudp.hh"
+#include "dnsfixer.hh"
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include "misc.hh"
@@ -13,10 +13,15 @@
 #include <netinet/ip6.h>
 #include <netinet/udp.h>
 #include <linux/if_packet.h>
+#include <fstream>
 #include <net/ethernet.h> /* the L2 protocols */
 #include "dnsrecords.hh"
+#include "dolog.hh"
+#include <boost/program_options.hpp>
 
 StatBag S;
+namespace po = boost::program_options;
+po::variables_map g_vm;
 
 int getindex(int s, const std::string& interface)
 {
@@ -140,22 +145,67 @@ uint16_t ip_checksum(const void* vdata,size_t length) {
     return htons(~acc);
 }
 
-
-int main()
+string parseMac(const std::string& in)
 {
+  unsigned int parts[6];
+  if(sscanf(in.c_str(),"%02x:%02x:%02x:%02x:%02x:%02x",
+         &parts[0],
+         &parts[1],
+         &parts[2],
+         &parts[3],
+         &parts[4],
+            &parts[5]) != 6) {
+    throw std::runtime_error("Input '"+in+"' does not look like MAC address. Remove quotes?");
+  }
+
+  string ret;
+  for(int n=0; n<6; ++n)
+    ret.append(1, (char)parts[n]);
+
+  return ret;
+}
+
+int main(int argc, char** argv)
+try
+{
+  po::options_description desc("Allowed options");
+  desc.add_options()
+    ("help,h", "produce help message")
+    ("input-interface", po::value<string>()->required(), "Interface to listen on")
+    ("quiet", po::value<bool>()->default_value(true), "don't be too noisy")
+    ("mac-gw", po::value<string>()->required(), "MAC address of default gw")
+    ("recursor", po::value<string>()->required(), "Backend recursor IP:port address");
+
+  std::ifstream configfile("dnsfixer.conf");
+  if(configfile) {
+    po::store(po::parse_config_file(configfile, desc), g_vm);
+  }
+  
+  po::store(po::command_line_parser(argc, argv).options(desc).run(), g_vm);
+  po::notify(g_vm);
+
+  if (g_vm.count("help")) {
+    cout<<desc<<endl;
+    return EXIT_SUCCESS;
+  }
+
+  
+  
   reportAllTypes();
+  string mac=parseMac(g_vm["mac-gw"].as<string>());
   RawUDPListener rul(53, "nonbt");
   string payload, packet;
   ComboAddress src, dst;
 //  string mac("\x00\x0d\xb9\x3f\x80\x18", 6);
-  string mac("\xb8\x27\xeb\x13\x0d\x73", 6);
+//  string mac("\xb8\x27\xeb\x13\x0d\x73", 6);
+  ComboAddress recursor(g_vm["recursor"].as<string>(), 53);
 
 
   int recsock = socket(AF_INET, SOCK_DGRAM, 0);
   if(recsock < 0)
     unixDie("Making socket to talk to recursor");
     
-  ComboAddress recursor("172.16.1.3:53");
+
   if(connect(recsock, (struct sockaddr*)&recursor, recursor.getSocklen()) < 0)
     unixDie("Connecting to recursor");
   
@@ -239,4 +289,9 @@ int main()
     else
       cout<<"Got error"<<endl;
   }
+}
+catch(std::exception& e)
+{
+  cerr<<"Error: "<<e.what()<<endl;
+  return EXIT_FAILURE;
 }

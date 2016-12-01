@@ -236,12 +236,12 @@ try
         if(len < 0)
           unixDie("Receiving answer from recursor");
 
-        infolog("Actual recursor said");
+        infolog("Actual recursor said: ");
         MOADNSParser rep(string(verdict, len));
         bool blocked=false;        
         for(const auto& a : rep.d_answers) {
-          infolog("%s %s %s", a.first.d_name, DNSRecordContent::NumberToType(a.first.d_type), a.first.d_content->getZoneRepresentation());
-          if((a.first.d_type == QType::A && a.first.d_content->getZoneRepresentation()==g_vm["block-marker"].as<string>()))
+          infolog("  %s %s %s", a.first.d_name, DNSRecordContent::NumberToType(a.first.d_type), a.first.d_content->getZoneRepresentation());
+          if(((a.first.d_type == QType::A || a.first.d_type ==QType::CNAME) && a.first.d_content->getZoneRepresentation()==g_vm["block-marker"].as<string>()))
             blocked = true;
         }
 

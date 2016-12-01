@@ -164,12 +164,13 @@ string parseMac(const std::string& in)
   return ret;
 }
 
-bool g_syslog;
+bool g_syslog{true};
 bool g_console{true};
 
 int main(int argc, char** argv)
 try
 {
+  openlog("dnsfixer", LOG_PID | LOG_CONS, LOG_DAEMON);
   infolog("dnsfixer starting up");
   po::options_description desc("Allowed options");
   desc.add_options()

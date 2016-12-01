@@ -18,6 +18,7 @@
 #include "dnsrecords.hh"
 #include "dolog.hh"
 #include <boost/program_options.hpp>
+#include "ednssubnet.hh"
 
 StatBag S;
 namespace po = boost::program_options;
@@ -229,7 +230,18 @@ try
                 src.toStringWithPort(),
                 dst.toStringWithPort());
 
-        if(send(recsock, payload.c_str(), payload.size(), 0) < 0)
+        vector<uint8_t> spacket;
+        DNSPacketWriter pw(spacket, mdp.d_qname, mdp.d_qtype);
+        pw.getHeader()->id=random();
+        pw.getHeader()->rd=0;
+        DNSPacketWriter::optvect_t opts;
+        EDNSSubnetOpts eo;
+        eo.source = Netmask(src);
+        opts.push_back(make_pair(8, makeEDNSSubnetOptsString(eo)));
+        pw.addOpt(1600, 0, 0, opts);
+        pw.commit();
+  
+        if(send(recsock, &spacket[0], spacket.size(), 0) < 0)
           unixDie("Sending query to recursor");
         char verdict[1500];
         int len=recv(recsock, verdict, sizeof(verdict), 0);

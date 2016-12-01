@@ -47,7 +47,6 @@ RawUDPListener::RawUDPListener(int port, const std::string& interface)
     iface.sll_family = AF_PACKET;
     iface.sll_protocol = htons(ETH_P_IP);
     iface.sll_ifindex = getindex(d_socket, interface);
-    cout<<"Index for "<<interface<<" is "<<iface.sll_ifindex<<endl;
     if(bind(d_socket, (struct sockaddr*)&iface, sizeof(iface)) < 0)
       unixDie("binding to interface");
     
@@ -177,6 +176,7 @@ try
     ("help,h", "produce help message")
     ("input-interface", po::value<string>()->required(), "Interface to listen on")
     ("output-interface", po::value<string>()->required(), "Interface to forward non-blocked queries to")
+    ("block-marker", po::value<string>()->required(), "IP address or CNAME to recognize blocking by")
     ("quiet", po::value<bool>()->default_value(true), "don't be too noisy")
     ("mac-gw", po::value<string>()->required(), "MAC address of default gw")
     ("recursor", po::value<string>()->required(), "Backend recursor IP:port address");
@@ -235,12 +235,12 @@ try
         if(len < 0)
           unixDie("Receiving answer from recursor");
 
-        cout<<"Actual recursor said: "<<endl;        
+        infolog("Actual recursor said");
         MOADNSParser rep(string(verdict, len));
         bool blocked=false;        
         for(const auto& a : rep.d_answers) {
-          cout << a.first.d_name <<" " <<DNSRecordContent::NumberToType(a.first.d_type)<<" "<<a.first.d_content->getZoneRepresentation()<<endl;
-          if(a.first.d_type == QType::A && a.first.d_content->getZoneRepresentation()=="172.16.1.3")
+          infolog("%s %s %s", a.first.d_name, DNSRecordContent::NumberToType(a.first.d_type), a.first.d_content->getZoneRepresentation());
+          if((a.first.d_type == QType::A && a.first.d_content->getZoneRepresentation()==g_vm["block-marker"].as<string>()))
             blocked = true;
         }
 

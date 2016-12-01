@@ -165,13 +165,18 @@ string parseMac(const std::string& in)
   return ret;
 }
 
+bool g_syslog;
+bool g_console{true};
+
 int main(int argc, char** argv)
 try
 {
+  infolog("dnsfixer starting up");
   po::options_description desc("Allowed options");
   desc.add_options()
     ("help,h", "produce help message")
     ("input-interface", po::value<string>()->required(), "Interface to listen on")
+    ("output-interface", po::value<string>()->required(), "Interface to forward non-blocked queries to")
     ("quiet", po::value<bool>()->default_value(true), "don't be too noisy")
     ("mac-gw", po::value<string>()->required(), "MAC address of default gw")
     ("recursor", po::value<string>()->required(), "Backend recursor IP:port address");
@@ -193,7 +198,7 @@ try
   
   reportAllTypes();
   string mac=parseMac(g_vm["mac-gw"].as<string>());
-  RawUDPListener rul(53, "nonbt");
+  RawUDPListener rul(53, g_vm["input-interface"].as<string>());
   string payload, packet;
   ComboAddress src, dst;
 //  string mac("\x00\x0d\xb9\x3f\x80\x18", 6);
@@ -212,14 +217,16 @@ try
   for(;;) {
     struct sockaddr_ll macsrc;
     if(rul.getPacket(&src, &dst, &macsrc, &payload, &packet)) {
-      cout<<"Got "<<payload.size()<<" bytes from "<<src.toStringWithPort()<<" to "<<dst.toStringWithPort()<<endl;
-      cout<<makeHexDump(payload)<<endl;
       if(dst.sin4.sin_port != htons(53))
-        cout<<"NOT DNS QUERY: ";
+        continue;
       else {
         MOADNSParser mdp(payload);
-        cout<<"Query for "<<mdp.d_qname<<" | "<<DNSRecordContent::NumberToType(mdp.d_qtype)<<endl;
-        cout<<"Mac: "<<makeHexDump(string((const char*)&macsrc.sll_addr, 6))<<", ifi: "<<macsrc.sll_ifindex<<endl;
+        infolog("Received DNS query for %s|%s, rd=%d from %s to %s",
+                mdp.d_qname.toString(),
+                DNSRecordContent::NumberToType(mdp.d_qtype),
+                mdp.d_header.rd,
+                src.toStringWithPort(),
+                dst.toStringWithPort());
 
         if(send(recsock, payload.c_str(), payload.size(), 0) < 0)
           unixDie("Sending query to recursor");
@@ -241,10 +248,8 @@ try
         // if we get non-blocked answer, send on to internet
         // if we get blocked answer, send back blocked answer
         
-
-        
         if(blocked) {
-          cout<<"Query was blocked"<<endl;
+          infolog("Query was blocked by recursor");
           // now we need to pretend we are '1.2.3.4', the evil nameserver
           char p[packet.size()+1500];
           memcpy(p, packet.c_str(), packet.size());
@@ -279,8 +284,8 @@ try
         }
         else {
           // pass it on
-          cout<<"Sending on query.."<<endl;
-          rul.sendPacket(packet, "eth0", mac);
+          infolog("Query was not blocked, forwarding to internet");
+          rul.sendPacket(packet, g_vm["output-interface"].as<string>(), mac);
         }
       }
       

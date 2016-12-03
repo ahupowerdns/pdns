@@ -208,13 +208,6 @@ try
   ComboAddress recursor(g_vm["recursor"].as<string>(), 53);
 
 
-  int recsock = socket(AF_INET, SOCK_DGRAM, 0);
-  if(recsock < 0)
-    unixDie("Making socket to talk to recursor");
-    
-
-  if(connect(recsock, (struct sockaddr*)&recursor, recursor.getSocklen()) < 0)
-    unixDie("Connecting to recursor");
   
   for(;;) {
     struct sockaddr_ll macsrc;
@@ -240,23 +233,40 @@ try
         opts.push_back(make_pair(8, makeEDNSSubnetOptsString(eo)));
         pw.addOpt(1600, 0, 0, opts);
         pw.commit();
-  
+
+        int recsock = socket(AF_INET, SOCK_DGRAM, 0);
+        if(recsock < 0)
+          unixDie("Making socket to talk to recursor");
+
+        setNonBlocking(recsock);
+        if(connect(recsock, (struct sockaddr*)&recursor, recursor.getSocklen()) < 0)
+          unixDie("Connecting to recursor");
+        
+        
         if(send(recsock, &spacket[0], spacket.size(), 0) < 0)
           unixDie("Sending query to recursor");
-        char verdict[1500];
-        int len=recv(recsock, verdict, sizeof(verdict), 0);
-        if(len < 0)
-          unixDie("Receiving answer from recursor");
 
-        infolog("Actual recursor said: ");
-        MOADNSParser rep(string(verdict, len));
         bool blocked=false;        
-        for(const auto& a : rep.d_answers) {
-          infolog("  %s %s %s", a.first.d_name, DNSRecordContent::NumberToType(a.first.d_type), a.first.d_content->getZoneRepresentation());
-          if(((a.first.d_type == QType::A || a.first.d_type ==QType::CNAME) && a.first.d_content->getZoneRepresentation()==g_vm["block-marker"].as<string>()))
-            blocked = true;
-        }
+        int ret=waitForData(recsock, 0, 100000);
+        char verdict[1500];
+        int verdictlen;          
+        if(ret < 0)
+          unixDie("Waiting for answer from recursor");
+        if(ret!=0) {
+          verdictlen=recv(recsock, verdict, sizeof(verdict), 0);
+          if(verdictlen < 0)
+            unixDie("Receiving answer from recursor");
+          
+          infolog("Actual recursor said: ");
+          MOADNSParser rep(string(verdict, verdictlen));
 
+          for(const auto& a : rep.d_answers) {
+            infolog("  %s %s %s", a.first.d_name, DNSRecordContent::NumberToType(a.first.d_type), a.first.d_content->getZoneRepresentation());
+            if(((a.first.d_type == QType::A || a.first.d_type ==QType::CNAME) && a.first.d_content->getZoneRepresentation()==g_vm["block-marker"].as<string>()))
+              blocked = true;
+          }
+        }
+        close(recsock);
         // send query to our normal nameserver, see what it does
         // if we get non-blocked answer, send on to internet
         // if we get blocked answer, send back blocked answer
@@ -281,10 +291,10 @@ try
           dh->id = mdp.d_header.id;
           
           auto startpos = 4*iphdr->ip_hl + sizeof(struct udphdr);
-          memcpy(p+startpos, verdict, len);
+          memcpy(p+startpos, verdict, verdictlen);
 
-          iphdr->ip_len = htons(4*iphdr->ip_hl + sizeof(struct udphdr) + len);
-          udphdr->uh_ulen = htons(sizeof(struct udphdr) + len);
+          iphdr->ip_len = htons(4*iphdr->ip_hl + sizeof(struct udphdr) + verdictlen);
+          udphdr->uh_ulen = htons(sizeof(struct udphdr) + verdictlen);
           
           iphdr->ip_sum = 0;
           iphdr->ip_sum = ip_checksum(p, 4*iphdr->ip_hl); 
@@ -292,7 +302,7 @@ try
           udphdr->uh_sum = 0;
 //          udphdr->uh_sum = ip_checksum(p+4*iphdr->ip_hl, ntohs(udphdr->uh_ulen));
           
-          rul.sendPacket(string(p, startpos + len), macsrc);
+          rul.sendPacket(string(p, startpos + verdictlen), macsrc);
           
         }
         else {

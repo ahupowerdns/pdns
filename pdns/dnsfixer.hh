@@ -11,6 +11,7 @@ public:
   bool getPacket(ComboAddress* src, ComboAddress* dst, struct sockaddr_ll* addr, std::string* payload, std::string* whole=0);
   void sendPacket(const std::string& ippacket, const std::string& interface, const std::string& mac);  
   void sendPacket(const std::string& ippacket, const struct sockaddr_ll& addr);
+  int getFD() const { return d_socket; }
 private:
   int d_socket;
 

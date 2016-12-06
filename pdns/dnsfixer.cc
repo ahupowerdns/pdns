@@ -168,6 +168,98 @@ string parseMac(const std::string& in)
 bool g_syslog{true};
 bool g_console{true};
 
+/* The new design:
+   two sockets
+     one receives/sends raw packets
+     one talks to the nameserver
+
+   simple poll loop. We lob on raw packets straight to the recursor, with two modifications:
+      id gets stamped
+      rd bit gets dropped
+   we do NO OTHER parsing, which hugely simplifies the security footprint
+
+   We do parse the return packets from the reference recursor to figure out the 'verdict'. 
+   If answer is block, spoof in the correct ID field and RD bit again.
+
+   If answer is not block, emit the raw packet to the original destination again.
+
+   For state, this means keeping:
+   Original unmodified packet (from which we can glean ID and RD bit)
+   Original sender (lladdr!)
+   Original recipient (lladdr!)
+
+   ID policy: for now, randomized 2^16 sequence */
+
+struct FixState
+{
+  string originalPacket;
+  struct sockaddr_ll macsrc;
+  ComboAddress source;
+  ComboAddress dest;
+};
+
+std::map<std::pair<uint32_t,DNSName>,FixState> g_fixstates;
+
+void goForward(const std::string& payload, const std::string& packet, const struct sockaddr_ll& macsrc, const ComboAddress& src, const ComboAddress& dst, int recsock)
+{
+  MOADNSParser mdp(payload);
+  infolog("Received DNS query for %s|%s, rd=%d from %s to %s",
+          mdp.d_qname.toString(),
+          DNSRecordContent::NumberToType(mdp.d_qtype),
+          mdp.d_header.rd,
+          src.toStringWithPort(),
+          dst.toStringWithPort());
+  
+  vector<uint8_t> spacket;
+  DNSPacketWriter pw(spacket, mdp.d_qname, mdp.d_qtype);
+  pw.getHeader()->id=random();
+  pw.getHeader()->rd=0;
+  DNSPacketWriter::optvect_t opts;
+  EDNSSubnetOpts eo;
+  eo.source = Netmask(src);
+  opts.push_back(make_pair(8, makeEDNSSubnetOptsString(eo)));
+  pw.addOpt(1600, 0, 0, opts);
+  pw.commit();
+  
+  if(send(recsock, &spacket[0], spacket.size(), 0) < 0)
+    unixDie("Sending query to recursor");
+  uint16_t id = pw.getHeader()->id; // is a bitfield
+  g_fixstates[{id,mdp.d_qname}]={packet, macsrc, src, dst};
+}
+
+// returns true if it got blocked and we have a FixState for you
+// returns false in all other cases
+bool getVerdict(const char* verdict, int verdictlen, FixState* fs)
+try
+{
+  infolog("Actual recursor said: ");
+  MOADNSParser rep(string(verdict, verdictlen));
+
+  uint16_t id = rep.d_header.id;
+  auto iter = g_fixstates.find({id, rep.d_qname});
+  if(iter == g_fixstates.end()) {
+    infolog("Got untracked answer from reference DNS server for %s|%s with id %d",
+            rep.d_qname,
+            DNSRecordContent::NumberToType(rep.d_qtype),
+            id);
+    return false;
+  }
+  *fs = iter->second;
+  g_fixstates.erase(iter);
+  
+  for(const auto& a : rep.d_answers) {
+    infolog("  %s %s %s", a.first.d_name, DNSRecordContent::NumberToType(a.first.d_type), a.first.d_content->getZoneRepresentation());
+    if(((a.first.d_type == QType::A || a.first.d_type ==QType::CNAME) && a.first.d_content->getZoneRepresentation()==g_vm["block-marker"].as<string>()))
+      return true;
+  }
+  return false;
+}
+catch(std::exception& e)
+{
+  errlog("Parsing packet from reference nameserver: %s", e.what());
+  return false;
+}
+
 int main(int argc, char** argv)
 try
 {
@@ -195,127 +287,92 @@ try
     cout<<desc<<endl;
     return EXIT_SUCCESS;
   }
-
-  
   
   reportAllTypes();
   string mac=parseMac(g_vm["mac-gw"].as<string>());
   RawUDPListener rul(53, g_vm["input-interface"].as<string>());
-  string payload, packet;
-  ComboAddress src, dst;
-//  string mac("\x00\x0d\xb9\x3f\x80\x18", 6);
-//  string mac("\xb8\x27\xeb\x13\x0d\x73", 6);
   ComboAddress recursor(g_vm["recursor"].as<string>(), 53);
 
-
+  int recsock = socket(AF_INET, SOCK_DGRAM, 0);
+  if(recsock < 0)
+    unixDie("Making socket to talk to recursor");
   
+  setNonBlocking(recsock);
+  if(connect(recsock, (struct sockaddr*)&recursor, recursor.getSocklen()) < 0)
+    unixDie("Connecting to recursor");
+
   for(;;) {
-    struct sockaddr_ll macsrc;
-    if(rul.getPacket(&src, &dst, &macsrc, &payload, &packet)) {
-      if(dst.sin4.sin_port != htons(53))
-        continue;
-      else {
-        MOADNSParser mdp(payload);
-        infolog("Received DNS query for %s|%s, rd=%d from %s to %s",
-                mdp.d_qname.toString(),
-                DNSRecordContent::NumberToType(mdp.d_qtype),
-                mdp.d_header.rd,
-                src.toStringWithPort(),
-                dst.toStringWithPort());
+    int fd;
+    auto ret=waitFor2Data(recsock, rul.getFD(), 1, 0, &fd);
+    if(ret < 0)
+      unixDie("Waiting for data on our sockets");
+    if(!ret)
+      continue;
 
-        vector<uint8_t> spacket;
-        DNSPacketWriter pw(spacket, mdp.d_qname, mdp.d_qtype);
-        pw.getHeader()->id=random();
-        pw.getHeader()->rd=0;
-        DNSPacketWriter::optvect_t opts;
-        EDNSSubnetOpts eo;
-        eo.source = Netmask(src);
-        opts.push_back(make_pair(8, makeEDNSSubnetOptsString(eo)));
-        pw.addOpt(1600, 0, 0, opts);
-        pw.commit();
+    if(fd == rul.getFD()) { // new raw query
+      string payload, packet;
+      ComboAddress src, dst;
+      struct sockaddr_ll macsrc;
 
-        int recsock = socket(AF_INET, SOCK_DGRAM, 0);
-        if(recsock < 0)
-          unixDie("Making socket to talk to recursor");
-
-        setNonBlocking(recsock);
-        if(connect(recsock, (struct sockaddr*)&recursor, recursor.getSocklen()) < 0)
-          unixDie("Connecting to recursor");
-        
-        
-        if(send(recsock, &spacket[0], spacket.size(), 0) < 0)
-          unixDie("Sending query to recursor");
-
-        bool blocked=false;        
-        int ret=waitForData(recsock, 0, 100000);
-        char verdict[1500];
-        int verdictlen;          
-        if(ret < 0)
-          unixDie("Waiting for answer from recursor");
-        if(ret!=0) {
-          verdictlen=recv(recsock, verdict, sizeof(verdict), 0);
-          if(verdictlen < 0)
-            unixDie("Receiving answer from recursor");
-          
-          infolog("Actual recursor said: ");
-          MOADNSParser rep(string(verdict, verdictlen));
-
-          for(const auto& a : rep.d_answers) {
-            infolog("  %s %s %s", a.first.d_name, DNSRecordContent::NumberToType(a.first.d_type), a.first.d_content->getZoneRepresentation());
-            if(((a.first.d_type == QType::A || a.first.d_type ==QType::CNAME) && a.first.d_content->getZoneRepresentation()==g_vm["block-marker"].as<string>()))
-              blocked = true;
-          }
-        }
-        close(recsock);
-        // send query to our normal nameserver, see what it does
-        // if we get non-blocked answer, send on to internet
-        // if we get blocked answer, send back blocked answer
-        
-        if(blocked) {
-          infolog("Query was blocked by recursor");
-          // now we need to pretend we are '1.2.3.4', the evil nameserver
-          char p[packet.size()+1500];
-          memcpy(p, packet.c_str(), packet.size());
-          struct ip *iphdr = (struct ip*)p;
-          struct udphdr *udphdr= (struct udphdr*)(p + 4 * iphdr->ip_hl);
-
-          auto tmp1 = iphdr->ip_src;
-          iphdr->ip_src= iphdr->ip_dst;
-          iphdr->ip_dst = tmp1;
-          
-          auto tmp2 = udphdr->uh_sport;
-          udphdr->uh_sport = udphdr->uh_dport;
-          udphdr->uh_dport = tmp2;
-          
-          struct dnsheader* dh = (struct dnsheader*)verdict;
-          dh->id = mdp.d_header.id;
-          
-          auto startpos = 4*iphdr->ip_hl + sizeof(struct udphdr);
-          memcpy(p+startpos, verdict, verdictlen);
-
-          iphdr->ip_len = htons(4*iphdr->ip_hl + sizeof(struct udphdr) + verdictlen);
-          udphdr->uh_ulen = htons(sizeof(struct udphdr) + verdictlen);
-          
-          iphdr->ip_sum = 0;
-          iphdr->ip_sum = ip_checksum(p, 4*iphdr->ip_hl); 
-          
-          udphdr->uh_sum = 0;
-//          udphdr->uh_sum = ip_checksum(p+4*iphdr->ip_hl, ntohs(udphdr->uh_ulen));
-          
-          rul.sendPacket(string(p, startpos + verdictlen), macsrc);
-          
-        }
+      if(rul.getPacket(&src, &dst, &macsrc, &payload, &packet)) {
+        if(dst.sin4.sin_port != htons(53))
+          continue;
         else {
-          // pass it on
-          infolog("Query was not blocked, forwarding to internet");
-          rul.sendPacket(packet, g_vm["output-interface"].as<string>(), mac);
+          goForward(payload, packet, macsrc, src, dst, recsock);
         }
       }
-      
-
     }
-    else
-      cout<<"Got error"<<endl;
+    else {
+      char verdict[1500];
+      int verdictlen;          
+      
+      verdictlen=recv(recsock, verdict, sizeof(verdict), 0);
+      if(verdictlen < 0)
+        unixDie("Receiving answer from recursor");
+      FixState fs;
+      auto blocked=getVerdict(verdict, verdictlen, &fs);
+
+      if(blocked) {
+        infolog("Query * was blocked by recursor");
+        // now we need to pretend we are '1.2.3.4', the evil nameserver
+        char p[fs.originalPacket.size()+1500];
+        memcpy(p, fs.originalPacket.c_str(), fs.originalPacket.size());
+        struct ip *iphdr = (struct ip*)p;
+        struct udphdr *udphdr= (struct udphdr*)(p + 4 * iphdr->ip_hl);
+        
+        auto tmp1 = iphdr->ip_src;
+        iphdr->ip_src= iphdr->ip_dst;
+        iphdr->ip_dst = tmp1;
+        
+        auto tmp2 = udphdr->uh_sport;
+        udphdr->uh_sport = udphdr->uh_dport;
+        udphdr->uh_dport = tmp2;
+        
+        
+        auto startpos = 4*iphdr->ip_hl + sizeof(struct udphdr);
+
+        struct dnsheader* dh = (struct dnsheader*)verdict;
+        dh->id = ((struct dnsheader*)(fs.originalPacket.c_str() + startpos))->id;
+        
+        memcpy(p+startpos, verdict, verdictlen);
+        
+        iphdr->ip_len = htons(4*iphdr->ip_hl + sizeof(struct udphdr) + verdictlen);
+        udphdr->uh_ulen = htons(sizeof(struct udphdr) + verdictlen);
+        
+        iphdr->ip_sum = 0;
+        iphdr->ip_sum = ip_checksum(p, 4*iphdr->ip_hl); 
+        
+        udphdr->uh_sum = 0;
+        //          udphdr->uh_sum = ip_checksum(p+4*iphdr->ip_hl, ntohs(udphdr->uh_ulen));
+        
+        rul.sendPacket(string(p, startpos + verdictlen), fs.macsrc);
+      }
+      else {
+        // pass it on
+        infolog("Query was not blocked, forwarding to internet");
+        rul.sendPacket(fs.originalPacket, g_vm["output-interface"].as<string>(), mac);
+      }
+    }
   }
 }
 catch(std::exception& e)

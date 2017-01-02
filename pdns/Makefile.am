@@ -973,6 +973,7 @@ dnsfixer_SOURCES = \
 	dnsrecords.cc \
 	dnswriter.cc dnswriter.hh \
 	ednssubnet.cc \
+	iputils.cc \
 	logger.cc \
 	misc.cc misc.hh \
 	nsecrecords.cc \

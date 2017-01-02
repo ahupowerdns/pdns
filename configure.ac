@@ -47,7 +47,7 @@ AS_IF([test "x$with_luajit" = "xno"], [
 ])
 PDNS_CHECK_LUA_HPP
 
-AX_CXX_COMPILE_STDCXX_11
+AX_CXX_COMPILE_STDCXX(14, ext, mandatory)
 
 AC_MSG_CHECKING([whether we will enable compiler security checks])
 AC_ARG_ENABLE([hardening],

@@ -260,9 +260,49 @@ catch(std::exception& e)
   return false;
 }
 
+
+class TransparentSocket
+{
+public:
+  TransparentSocket(const ComboAddress& ca);
+  void sendTo(const ComboAddress& dest, const std::string& payload);
+private:
+  int d_fd;
+};
+
+
+TransparentSocket::TransparentSocket(const ComboAddress& ca)
+{
+  d_fd = SSocket(AF_INET, SOCK_DGRAM, 0);
+  SSetsockopt(d_fd,IPPROTO_IP , IP_TRANSPARENT, 1);
+  SBind(d_fd, ca);
+}
+
+void TransparentSocket::sendTo(const ComboAddress& dest, const std::string& payload)
+{
+  if(sendto(d_fd, payload.c_str(), payload.size(), 0, (struct sockaddr*)&dest, dest.getSocklen()) < 0)
+    unixDie("Sending packet");
+    
+}
+
+constexpr uint32_t operator "" _ipv4(const char* p, size_t l)
+{
+  uint32_t ret=0;
+  for(size_t n=0; n < l; ++n)
+    ret+=p[n];
+  return ret;
+}
+
 int main(int argc, char** argv)
 try
 {
+  cout<< "1.2.3.4"_ipv4 << endl;
+  
+  ComboAddress i("1.1.1.1", 0), d("52.48.64.3:53");
+  TransparentSocket tp(i);
+  tp.sendTo(d, "hallo");
+  return 0;
+  
   openlog("dnsfixer", LOG_PID | LOG_CONS, LOG_DAEMON);
   infolog("dnsfixer starting up");
   po::options_description desc("Allowed options");

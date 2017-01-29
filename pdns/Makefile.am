@@ -113,6 +113,7 @@ EXTRA_PROGRAMS = \
 	dnsreplay \
 	dnsscan \
 	dnsscope \
+	dnssecmeasure \
 	dnstcpbench \
 	dnswasher \
 	dumresp \
@@ -713,6 +714,59 @@ if PKCS11
 toysdig_SOURCES += pkcs11signers.cc pkcs11signers.hh
 toysdig_LDADD += $(P11KIT1_LIBS)
 endif
+
+
+dnssecmeasure_SOURCES = \
+	base32.cc \
+	base64.cc base64.hh \
+	dns_random.cc \
+	dnsname.cc dnsname.hh \
+	dnslabeltext.cc \
+	dnsparser.cc dnsparser.hh \
+	dnsrecords.cc \
+	dnssecinfra.cc \
+	dnswriter.cc dnswriter.hh \
+	ednssubnet.cc ednssubnet.hh \
+	filterpo.hh \
+	gss_context.cc gss_context.hh \
+	iputils.cc \
+	logger.cc \
+	misc.cc misc.hh \
+	nsecrecords.cc \
+	opensslsigners.cc opensslsigners.hh \
+	qtype.cc \
+	randomhelper.cc \
+	root-dnssec.hh \
+	rcpgenerator.cc rcpgenerator.hh \
+	rec-lua-conf.hh \
+	recursor_cache.hh \
+	sholder.hh \
+	sillyrecords.cc \
+	sortlist.hh \
+	sstuff.hh \
+	statbag.cc \
+	dnssecmeasure.cc \
+	unix_utility.cc 
+
+
+dnssecmeasure_LDFLAGS = $(AM_LDFLAGS) \
+	$(LIBCRYPTO_LDFLAGS)
+dnssecmeasure_LDADD = $(LIBCRYPTO_LIBS)
+
+if GSS_TSIG
+dnssecmeasure_LDADD += $(GSS_LIBS)
+endif
+
+if BOTAN110
+dnssecmeasure_SOURCES += botan110signers.cc
+dnssecmeasure_LDADD += $(BOTAN110_LIBS)
+endif
+
+if PKCS11
+dnssecmeasure_SOURCES += pkcs11signers.cc pkcs11signers.hh
+dnssecmeasure_LDADD += $(P11KIT1_LIBS)
+endif
+
 
 tsig_tests_SOURCES = \
 	arguments.cc \

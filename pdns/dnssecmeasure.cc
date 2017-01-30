@@ -173,6 +173,8 @@ struct
 
 ofstream g_log("log");
 
+std::atomic<unsigned int> g_querycounter;
+unsigned int g_limit = 4096;
 void askAddr(const DNSName& tld, const ComboAddress& ca)
 try
 {
@@ -198,7 +200,7 @@ try
   
   int count=0;
   
-  while(Distances.size() < 4096) {
+  while(++g_querycounter < g_limit) {
     uint16_t len;
     vector<uint8_t> packet;
     DNSName qname(std::to_string(random()));
@@ -222,25 +224,13 @@ try
       throw PDNSException("tcp read failed");
     
     len=ntohs(len);
-    char *creply = new char[len];
-    int n=0;
-    int numread;
-    while(n<len) {
-      numread=sock.read(creply+n, len-n);
-      if(numread<0)
-        throw PDNSException("tcp read failed");
-      n+=numread;
-    }
-
-    string reply(creply, len);
-    delete[] creply;
+    scoped_array<char> creply(new char[len]);
+    readn2(sock.getHandle(), creply.get(), len);
+    
+    string reply(creply.get(), len);
     
     MOADNSParser mdp(false, reply);
-    /*
-    cout<<"Reply to question for qname='"<<mdp.d_qname<<"', qtype="<<DNSRecordContent::NumberToType(mdp.d_qtype)<<endl;
-    cout<<"Rcode: "<<mdp.d_header.rcode<<", RD: "<<mdp.d_header.rd<<", QR: "<<mdp.d_header.qr;
-    cout<<", TC: "<<mdp.d_header.tc<<", AA: "<<mdp.d_header.aa<<", opcode: "<<mdp.d_header.opcode<<endl;
-    */
+    
     for(MOADNSParser::answers_t::const_iterator i=mdp.d_answers.begin(); i!=mdp.d_answers.end(); ++i) {
       if(i->first.d_type == QType::NSEC) {
         cout<<"Not an NSEC3 zone!"<<endl;
@@ -281,7 +271,7 @@ void askName(const DNSName& tld, const vector<ComboAddress>& resolvers, const DN
   auto addr = lookupAddr(resolvers, name, qtype);
   vector<std::thread> threads;
   for(const auto& a : addr) {
-    cout<<"Will query "<<name<<" on address "<<a.toString()<<endl;
+    cout<<a.toString()+" "; cout.flush();
     threads.emplace_back(std::thread(askAddr, tld, a));
   }
   for(auto&t : threads)
@@ -300,8 +290,16 @@ try
   DNSName tld(argv[1]);
   auto tldservers = getNS(resolvers, tld);
   vector<std::thread> threads;
+
+  if(argc > 2)
+    g_limit=atoi(argv[2]);
+    
+  cout<<"Will send "<<g_limit<<" queries to: ";
   for(const auto& name: tldservers) {
-    cout<<"Will ask server "<<name<<endl;
+    cout<<name<<" ";
+  }
+  cout<<endl; 
+  for(const auto& name: tldservers) {
     threads.push_back(std::thread(askName, tld, resolvers, name, QType::A));
     threads.push_back(std::thread(askName, tld, resolvers, name, QType::AAAA));
   }
@@ -315,7 +313,7 @@ try
     distfile<<(d.second-d.first)<<"\t"<<((d.second-d.first)>>39) <<endl;
     lin+=pow(2.0,64.0)/(d.second-d.first);
   }
-  cout<<"Poisson size "<<lin/Distances.d_distances.size()<<endl;
+  cout<<"\nPoisson size "<<lin/Distances.d_distances.size()<<endl;
   exit(EXIT_SUCCESS);
 }
 catch(std::exception &e)

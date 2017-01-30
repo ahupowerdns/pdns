@@ -171,7 +171,7 @@ struct
 
 } Distances;
 
-ofstream g_log("log");
+//ofstream g_log("log");
 
 std::atomic<unsigned int> g_querycounter;
 unsigned int g_limit = 4096;
@@ -247,7 +247,7 @@ try
         //        cout<<"Ratio: "<<0xffffffffffffffffULL/(1.0*to-from)<<", "<<to-from<<", ffs: "<<__builtin_clzll(to-from)<<endl;
         
         Distances.insert({from,to});
-        Distances.log(g_log);
+        //        Distances.log(g_log);
       }
     }
     /*

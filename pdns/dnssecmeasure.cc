@@ -174,6 +174,23 @@ struct
 
 //ofstream g_log("log");
 
+
+void unhiate(std::string& str)
+{
+  for(auto& c : str) {
+    if(c>='0' && c<='9')
+      c-='0';
+    else if(c>='a' && c<='z')
+      c=10+(c-'a');
+    else if(c=='-')
+      c=36;
+    else {
+      cout<<c<<endl;
+      exit(1);
+    }
+  }
+}
+
 std::atomic<unsigned int> g_querycounter;
 unsigned int g_limit = 4096;
 void askAddr(const DNSName& tld, const ComboAddress& ca)
@@ -205,7 +222,9 @@ try
     g_querycounter++;
     uint16_t len;
     vector<uint8_t> packet;
-    DNSName qname(std::to_string(random()));
+    uint64_t rnd = 1ULL*random()*random();
+    string query = toBase32Hex(string((char*)&rnd, 8));
+    DNSName qname(query);
     qname+=tld;
     
     DNSPacketWriter pw(packet, qname, QType::A);
@@ -241,8 +260,23 @@ try
     }
     for(MOADNSParser::answers_t::const_iterator i=mdp.d_answers.begin(); i!=mdp.d_answers.end(); ++i) {
       if(i->first.d_type == QType::NSEC) {
-        cout<<"Not an NSEC3 zone!"<<endl;
-        return;
+        seenDNSSEC=true;
+        NSECRecordContent r = dynamic_cast<NSECRecordContent&> (*(i->first.d_content));
+        uint64_t from=0, to=0;
+        auto firstlabel=i->first.d_name.getRawLabels()[0];
+        cout<<firstlabel<<" ";
+        unhiate(firstlabel);
+        memcpy(&from, firstlabel.c_str(), min((string::size_type)8, firstlabel.size()));
+        firstlabel=r.d_next.getRawLabels()[0];
+        cout<<firstlabel<<endl;
+        unhiate(firstlabel);
+        memcpy(&to, firstlabel.c_str(), min((string::size_type)8, firstlabel.size()));
+        from=be64toh(from);
+        to=be64toh(to);
+        if(from < to){
+          cout<<"Ratio: "<<(pow(36.0,8.0)/(1.0*to-from))<<", "<<to-from<<", "<<to<<" "<<from<<endl;
+          Distances.insert({from,to});
+        }
       }
       else if(i->first.d_type == QType::NSEC3) {
         seenDNSSEC=true;
@@ -318,8 +352,9 @@ try
   ofstream distfile("distances");
   double lin=0;
   for(const auto& d: Distances.d_distances) {
-    distfile<<(d.second-d.first)<<"\t"<<((d.second-d.first)>>39) <<endl;
-    lin+=pow(2.0,64.0)/(d.second-d.first);
+    distfile<<(d.second-d.first)<<"\t"<<((d.second-d.first)>>39) << "\t" << (uint64_t)(1.0*((36ULL)<<56ULL)/(d.second-d.first)) <<endl;
+    //    lin+=pow(2.0,64.0)/(d.second-d.first);
+    lin+=1.0*(pow(36.0,8.0))/(d.second-d.first);
   }
   cout<<"\n"<<argv[1]<<" poisson size "<<lin/Distances.d_distances.size()<<endl;
   cout<<"Based on "<<g_querycounter<<" queries"<<endl;

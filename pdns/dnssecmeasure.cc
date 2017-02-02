@@ -200,7 +200,8 @@ try
   
   int count=0;
   
-  while(++g_querycounter < g_limit) {
+  while(g_querycounter < g_limit) {
+    g_querycounter++;
     uint16_t len;
     vector<uint8_t> packet;
     DNSName qname(std::to_string(random()));
@@ -219,9 +220,12 @@ try
 
     if(count++ < 10)
       continue;
-    
-    if(sock.read((char *) &len, 2) != 2)
-      throw PDNSException("tcp read failed");
+
+    int ret=sock.read((char *) &len, 2);
+    if(!ret)
+      throw PDNSException("EOF on TCP");
+    if(ret!=2)
+      throw PDNSException("tcp read failed, read "+std::to_string(ret) + " bytes");
     
     len=ntohs(len);
     scoped_array<char> creply(new char[len]);
@@ -230,13 +234,17 @@ try
     string reply(creply.get(), len);
     
     MOADNSParser mdp(false, reply);
-    
+    bool seenDNSSEC=false;
+    if(mdp.d_header.rcode != RCode::NXDomain) {
+      continue;
+    }
     for(MOADNSParser::answers_t::const_iterator i=mdp.d_answers.begin(); i!=mdp.d_answers.end(); ++i) {
       if(i->first.d_type == QType::NSEC) {
         cout<<"Not an NSEC3 zone!"<<endl;
         return;
       }
-      if(i->first.d_type == QType::NSEC3) {
+      else if(i->first.d_type == QType::NSEC3) {
+        seenDNSSEC=true;
         NSEC3RecordContent r = dynamic_cast<NSEC3RecordContent&> (*(i->first.d_content));
         auto nsec3from=fromBase32Hex(i->first.d_name.getRawLabels()[0]);
         uint64_t from, to;
@@ -249,14 +257,13 @@ try
         Distances.insert({from,to});
         //        Distances.log(g_log);
       }
+      else if(i->first.d_type == QType::RRSIG || i->first.d_type == QType::DS) {
+        seenDNSSEC=true;
+      }
     }
-    /*
-    double lin=0;
-    for(const auto& d: distances) {
-      lin+=pow(2.0,64.0)/(d.second-d.first);
+    if(!seenDNSSEC) {
+      throw std::runtime_error("Did not see DNSSEC in response");
     }
-    conv<<q<<"\t"<<lin/distances.size()<<endl;
-    */
   }
 }
 catch(std::exception& e) {
@@ -313,7 +320,8 @@ try
     distfile<<(d.second-d.first)<<"\t"<<((d.second-d.first)>>39) <<endl;
     lin+=pow(2.0,64.0)/(d.second-d.first);
   }
-  cout<<"\nPoisson size "<<lin/Distances.d_distances.size()<<endl;
+  cout<<"\n"<<argv[1]<<" poisson size "<<lin/Distances.d_distances.size()<<endl;
+  cout<<"Based on "<<g_querycounter<<" queries"<<endl;
   exit(EXIT_SUCCESS);
 }
 catch(std::exception &e)

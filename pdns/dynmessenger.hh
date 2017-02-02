@@ -54,7 +54,7 @@ public:
   DynMessenger(const ComboAddress& remote,
     const string &password,
     int timeout_sec = 7,
-    int timeout_usec = 0);  //!< Create a DynMessenger sending to this file
+    int timeout_usec = 0);  //!< Create a DynMessenger sending to this IP address with this password
 
   ~DynMessenger();
 

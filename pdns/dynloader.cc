@@ -63,6 +63,7 @@ int main(int argc, char **argv)
   ::arg().set("remote-address","Remote address to query");
   ::arg().set("remote-port","Remote port to query")="53000";
   ::arg().set("secret","Secret needed to connect to remote PowerDNS");
+  ::arg().set("timeout", "Number of seconds to wait for the recursor to respond")="7";
 
   ::arg().set("config-name","Name of this virtual configuration - will rename the binary image")="";
   ::arg().setCmd("no-config","Don't parse configuration file");
@@ -112,7 +113,7 @@ int main(int argc, char **argv)
     string command=commands[0];
     shared_ptr<DynMessenger> D;
     if(::arg()["remote-address"].empty())
-      D=shared_ptr<DynMessenger>(new DynMessenger(socketname));
+      D=shared_ptr<DynMessenger>(new DynMessenger(socketname, ::arg().asNum("timeout")));
     else {
       uint16_t port;
       try {
@@ -123,7 +124,7 @@ int main(int argc, char **argv)
         exit(99);
       }
       
-      D=shared_ptr<DynMessenger>(new DynMessenger(ComboAddress(::arg()["remote-address"], port), ::arg()["secret"]));
+      D=shared_ptr<DynMessenger>(new DynMessenger(ComboAddress(::arg()["remote-address"], port), ::arg()["secret"], ::arg().asNum("timeout")));
     }
 
     string message;

@@ -382,6 +382,8 @@ try
   int secures=0;
   if(!Distances.d_distances.empty()) {
     for(const auto& d: Distances.d_distances) {
+      if(d.end == d.begin)
+        continue;
       distfile<<(d.end-d.begin)<<"\t"<<((d.end-d.begin)>>39) << "\t" << (uint64_t)(range/(d.end-d.begin)) <<endl;
       lin+= range/(d.end-d.begin);
       if(d.secure)

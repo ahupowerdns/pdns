@@ -35,6 +35,8 @@
 #include "dnssecinfra.hh"
 #include <fstream>
 #include <netinet/tcp.h>
+#include "json11.hpp"
+
 StatBag S;
 
 vector<ComboAddress> getResolvers()
@@ -174,25 +176,40 @@ struct
 
 //ofstream g_log("log");
 
+uint8_t g_characters=12;
 
-void unhiate(std::string& str)
+uint64_t numberify(const std::string& str)
 {
+  //  cout<<"Input: '"<<str<<"', size: "<<str.size()<<endl;
+  int pos=g_characters;
+  uint64_t ret=0;
   for(auto& c : str) {
-    if(c>='0' && c<='9')
-      c-='0';
+    uint8_t val;
+    if(c>= '0' && c<='9')
+      val = c-'0';
     else if(c>='a' && c<='z')
-      c=10+(c-'a');
-    else if(c=='-')
-      c=36;
-    else {
-      cout<<c<<endl;
-      exit(1);
-    }
+      val = 10+ (c-'a');
+    else if(c>='A' && c<='Z')
+      val = 10+ (c-'A');
+    else val = 37;
+    ret*=37;
+    ret+=val;
+    //    cout<<pos<<": "<<c<<", "<<(int)val<<endl;
+    if(!--pos)
+      break;
   }
+  while(pos) {
+    //    cout<<pos<<": pad"<<endl;
+    ret*=37;
+    --pos;
+  }
+  return ret;
+  
 }
 
 std::atomic<unsigned int> g_querycounter;
 unsigned int g_limit = 4096;
+bool g_nsecZone;
 void askAddr(const DNSName& tld, const ComboAddress& ca)
 try
 {
@@ -224,7 +241,11 @@ try
     vector<uint8_t> packet;
     uint64_t rnd = 1ULL*random()*random();
     string query = toBase32Hex(string((char*)&rnd, 8));
+    auto pos = query.find('=');
+    if(pos != string::npos)
+      query.resize(pos);
     DNSName qname(query);
+//    cout<<qname<<endl;
     qname+=tld;
     
     DNSPacketWriter pw(packet, qname, QType::A);
@@ -260,21 +281,16 @@ try
     }
     for(MOADNSParser::answers_t::const_iterator i=mdp.d_answers.begin(); i!=mdp.d_answers.end(); ++i) {
       if(i->first.d_type == QType::NSEC) {
+        g_nsecZone=true;
         seenDNSSEC=true;
         NSECRecordContent r = dynamic_cast<NSECRecordContent&> (*(i->first.d_content));
         uint64_t from=0, to=0;
         auto firstlabel=i->first.d_name.getRawLabels()[0];
-        cout<<firstlabel<<" ";
-        unhiate(firstlabel);
-        memcpy(&from, firstlabel.c_str(), min((string::size_type)8, firstlabel.size()));
+        from = numberify(firstlabel);
         firstlabel=r.d_next.getRawLabels()[0];
-        cout<<firstlabel<<endl;
-        unhiate(firstlabel);
-        memcpy(&to, firstlabel.c_str(), min((string::size_type)8, firstlabel.size()));
-        from=be64toh(from);
-        to=be64toh(to);
+        to = numberify(firstlabel);
         if(from < to){
-          cout<<"Ratio: "<<(pow(36.0,8.0)/(1.0*to-from))<<", "<<to-from<<", "<<to<<" "<<from<<endl;
+          //          cout<<"Ratio: "<<(pow(37.0,(double)g_characters)/(1.0*to-from))<<", "<<to-from<<", "<<to<<" "<<from<<endl;
           Distances.insert({from,to});
         }
       }
@@ -348,16 +364,34 @@ try
   for(auto& t : threads) {
     t.join();
   }
-    
+
+  using namespace json11;
+  
   ofstream distfile("distances");
   double lin=0;
-  for(const auto& d: Distances.d_distances) {
-    distfile<<(d.second-d.first)<<"\t"<<((d.second-d.first)>>39) << "\t" << (uint64_t)(1.0*((36ULL)<<56ULL)/(d.second-d.first)) <<endl;
-    //    lin+=pow(2.0,64.0)/(d.second-d.first);
-    lin+=1.0*(pow(36.0,8.0))/(d.second-d.first);
+  double range = g_nsecZone ? pow(37.0, g_characters) : pow(2.0, 64.0);
+  double estimate=0;
+  if(!Distances.d_distances.empty()) {
+    for(const auto& d: Distances.d_distances) {
+      distfile<<(d.second-d.first)<<"\t"<<((d.second-d.first)>>39) << "\t" << (uint64_t)(range/(d.second-d.first)) <<endl;
+      lin+= range/(d.second-d.first);
+    }
+    estimate = lin / Distances.d_distances.size();
   }
-  cout<<"\n"<<argv[1]<<" poisson size "<<lin/Distances.d_distances.size()<<endl;
+  cout<<"\n"<<argv[1]<<" poisson size "<<estimate<<endl;
   cout<<"Based on "<<g_querycounter<<" queries"<<endl;
+
+  auto obj=Json::object {
+    { "zone", argv[1]},
+    { "dnssec", Distances.d_distances.empty() ? false : true},
+    { "nsec-type", g_nsecZone ? "NSEC" : "NSEC3" },
+    { "delegation-estimate", (double)(uint64_t)estimate},
+    { "queries", (double)g_querycounter}
+  };
+  
+  Json output = obj;
+  cout<< output.dump() <<endl;
+  
   exit(EXIT_SUCCESS);
 }
 catch(std::exception &e)

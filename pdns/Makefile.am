@@ -751,7 +751,7 @@ dnssecmeasure_SOURCES = \
 
 dnssecmeasure_LDFLAGS = $(AM_LDFLAGS) \
 	$(LIBCRYPTO_LDFLAGS)
-dnssecmeasure_LDADD = $(LIBCRYPTO_LIBS)
+dnssecmeasure_LDADD = $(LIBCRYPTO_LIBS) $(JSON11_LIBS)
 
 if GSS_TSIG
 dnssecmeasure_LDADD += $(GSS_LIBS)

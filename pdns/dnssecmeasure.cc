@@ -135,7 +135,17 @@ vector<ComboAddress> lookupAddr(const vector<ComboAddress>& resolvers, const DNS
 
 struct
 {
-  void insert(const pair<uint64_t, uint64_t>& p)
+  struct Distance
+  {
+    uint64_t begin, end;
+    bool secure;
+    bool operator<(const Distance& rhs) const
+    {
+      return std::tie(begin, end, secure) < std::tie(rhs.begin, rhs.end, rhs.secure);
+    }
+  };
+
+  void insert(const Distance& p)
   {
     std::lock_guard<std::mutex> lock(d_mut);
     d_distances.insert(p);
@@ -153,7 +163,7 @@ struct
     double lin=0;
     double full=pow(2.0,64.0);
     for(const auto& d: d_distances) 
-      lin+=full/(d.second-d.first);
+      lin+=full/(d.end-d.begin);
     
     return lin/d_distances.size();
   }
@@ -165,11 +175,11 @@ struct
     double lin=0;
     double full=pow(2.0,64.0);
     for(const auto& d: d_distances) 
-      lin+=full/(d.second-d.first);
+      lin+=full/(d.end-d.begin);
     of<<lin/d_distances.size()<<endl;
   }
   
-  set<pair<uint64_t, uint64_t>> d_distances;
+  set<Distance> d_distances;
   std::mutex d_mut;
 
 } Distances;
@@ -262,11 +272,7 @@ try
     if(count++ < 10)
       continue;
 
-    int ret=sock.read((char *) &len, 2);
-    if(!ret)
-      throw PDNSException("EOF on TCP");
-    if(ret!=2)
-      throw PDNSException("tcp read failed, read "+std::to_string(ret) + " bytes");
+    readn2(sock.getHandle(), &len, 2);
     
     len=ntohs(len);
     scoped_array<char> creply(new char[len]);
@@ -284,6 +290,7 @@ try
         g_nsecZone=true;
         seenDNSSEC=true;
         NSECRecordContent r = dynamic_cast<NSECRecordContent&> (*(i->first.d_content));
+
         uint64_t from=0, to=0;
         auto firstlabel=i->first.d_name.getRawLabels()[0];
         from = numberify(firstlabel);
@@ -291,12 +298,13 @@ try
         to = numberify(firstlabel);
         if(from < to){
           //          cout<<"Ratio: "<<(pow(37.0,(double)g_characters)/(1.0*to-from))<<", "<<to-from<<", "<<to<<" "<<from<<endl;
-          Distances.insert({from,to});
+          Distances.insert({from,to, r.d_set.count(QType::DS) ? true : false});
         }
       }
       else if(i->first.d_type == QType::NSEC3) {
         seenDNSSEC=true;
         NSEC3RecordContent r = dynamic_cast<NSEC3RecordContent&> (*(i->first.d_content));
+
         auto nsec3from=fromBase32Hex(i->first.d_name.getRawLabels()[0]);
         uint64_t from, to;
         memcpy(&from, nsec3from.c_str(), 8);
@@ -305,7 +313,7 @@ try
         to=be64toh(to);
         //        cout<<"Ratio: "<<0xffffffffffffffffULL/(1.0*to-from)<<", "<<to-from<<", ffs: "<<__builtin_clzll(to-from)<<endl;
         
-        Distances.insert({from,to});
+        Distances.insert({from,to, r.d_set.count(QType::DS) ? true : false});
         //        Distances.log(g_log);
       }
       else if(i->first.d_type == QType::RRSIG || i->first.d_type == QType::DS) {
@@ -371,21 +379,28 @@ try
   double lin=0;
   double range = g_nsecZone ? pow(37.0, g_characters) : pow(2.0, 64.0);
   double estimate=0;
+  int secures=0;
   if(!Distances.d_distances.empty()) {
     for(const auto& d: Distances.d_distances) {
-      distfile<<(d.second-d.first)<<"\t"<<((d.second-d.first)>>39) << "\t" << (uint64_t)(range/(d.second-d.first)) <<endl;
-      lin+= range/(d.second-d.first);
+      distfile<<(d.end-d.begin)<<"\t"<<((d.end-d.begin)>>39) << "\t" << (uint64_t)(range/(d.end-d.begin)) <<endl;
+      lin+= range/(d.end-d.begin);
+      if(d.secure)
+        secures++;
     }
     estimate = lin / Distances.d_distances.size();
   }
   cout<<"\n"<<argv[1]<<" poisson size "<<estimate<<endl;
-  cout<<"Based on "<<g_querycounter<<" queries"<<endl;
+  cout<<"Based on "<<g_querycounter<<" queries, "<<Distances.d_distances.size()<<" distinct ranges"<<endl;
+  cout<<"Saw "<<secures<<" ranges that started secure"<<endl;
+  double factor = 1.0*secures/Distances.d_distances.size();
 
   auto obj=Json::object {
     { "zone", argv[1]},
     { "dnssec", Distances.d_distances.empty() ? false : true},
     { "nsec-type", g_nsecZone ? "NSEC" : "NSEC3" },
-    { "delegation-estimate", (double)(uint64_t)estimate},
+    { "secure-delegation-estimate", (double)(uint64_t)(factor*estimate)},
+    { "delegation-estimate", (double)(uint64_t)estimate },
+    { "secure-factor", factor },
     { "queries", (double)g_querycounter}
   };
   

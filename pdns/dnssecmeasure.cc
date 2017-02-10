@@ -380,7 +380,9 @@ try
   double range = g_nsecZone ? pow(37.0, g_characters) : pow(2.0, 64.0);
   double estimate=0;
   int secures=0;
+  double factor = 0;
   if(!Distances.d_distances.empty()) {
+  
     for(const auto& d: Distances.d_distances) {
       if(d.end == d.begin)
         continue;
@@ -390,11 +392,12 @@ try
         secures++;
     }
     estimate = lin / Distances.d_distances.size();
+    factor = 1.0*secures/Distances.d_distances.size();
   }
   cout<<"\n"<<argv[1]<<" poisson size "<<estimate<<endl;
   cout<<"Based on "<<g_querycounter<<" queries, "<<Distances.d_distances.size()<<" distinct ranges"<<endl;
   cout<<"Saw "<<secures<<" ranges that started secure"<<endl;
-  double factor = 1.0*secures/Distances.d_distances.size();
+
 
   auto obj=Json::object {
     { "zone", argv[1]},

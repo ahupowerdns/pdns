@@ -177,7 +177,7 @@ int SyncRes::beginResolve(const DNSName &qname, const QType &qtype, uint16_t qcl
     return -1;
 
   set<GetBestNSAnswer> beenthere;
-  int res=doResolve(qname, qtype, ret, 0, beenthere);
+  int res=doResolve(qname, qtype, ret, 0, beenthere, true);
   return res;
 }
 
@@ -407,7 +407,7 @@ int SyncRes::asyncresolveWrapper(const ComboAddress& ip, bool ednsMANDATORY, con
   return ret;
 }
 
-int SyncRes::doResolve(const DNSName &qname, const QType &qtype, vector<DNSRecord>&ret, unsigned int depth, set<GetBestNSAnswer>& beenthere)
+int SyncRes::doResolve(const DNSName &qname, const QType &qtype, vector<DNSRecord>&ret, unsigned int depth, set<GetBestNSAnswer>& beenthere, bool needAuth)
 {
   string prefix;
   if(doLog()) {
@@ -415,7 +415,7 @@ int SyncRes::doResolve(const DNSName &qname, const QType &qtype, vector<DNSRecor
     prefix.append(depth, ' ');
   }
 
-  LOG(prefix<<qname<<": Wants "<< (d_doDNSSEC ? "" : "NO ") << "DNSSEC processing in query for "<<qtype.getName()<<endl);
+  LOG(prefix<<qname<<": Wants "<< (d_doDNSSEC ? "" : "NO ") << "DNSSEC processing in query for "<<qtype.getName()<<", a="<<needAuth<<endl);
 
   if(s_maxdepth && depth > s_maxdepth)
     throw ImmediateServFailException("More than "+std::to_string(s_maxdepth)+" (max-recursion-depth) levels of recursion needed while resolving "+qname.toLogString());
@@ -451,10 +451,10 @@ int SyncRes::doResolve(const DNSName &qname, const QType &qtype, vector<DNSRecor
       }
     }
 
-    if(!d_skipCNAMECheck && doCNAMECacheCheck(qname,qtype,ret,depth,res)) // will reroute us if needed
+    if(!d_skipCNAMECheck && doCNAMECacheCheck(qname,qtype,ret,depth,needAuth, res)) // will reroute us if needed
       return res;
 
-    if(doCacheCheck(qname,qtype,ret,depth,res)) // we done
+    if(doCacheCheck(qname,qtype,ret,depth, needAuth, res)) // we done
       return res;
   }
 
@@ -475,7 +475,7 @@ int SyncRes::doResolve(const DNSName &qname, const QType &qtype, vector<DNSRecor
     subdomain=getBestNSNamesFromCache(subdomain, qtype, nsset, &flawedNSSet, depth, beenthere); //  pass beenthere to both occasions
   }
 
-  if(!(res=doResolveAt(nsset, subdomain, flawedNSSet, qname, qtype, ret, depth, beenthere)))
+  if(!(res=doResolveAt(nsset, subdomain, flawedNSSet, qname, qtype, ret, depth, beenthere, needAuth)))
     return 0;
 
   LOG(prefix<<qname<<": failed (res="<<res<<")"<<endl);
@@ -522,7 +522,7 @@ vector<ComboAddress> SyncRes::getAddrs(const DNSName &qname, unsigned int depth,
         break;
     }
 
-    if(!doResolve(qname, type, res,depth+1, beenthere) && !res.empty()) {  // this consults cache, OR goes out
+    if(!doResolve(qname, type, res,depth+1, beenthere, false) && !res.empty()) {  // this consults cache, OR goes out
       for(res_t::const_iterator i=res.begin(); i!= res.end(); ++i) {
         if(i->d_type == QType::A || i->d_type == QType::AAAA) {
 	  if(auto rec = std::dynamic_pointer_cast<ARecordContent>(i->d_content))
@@ -536,7 +536,7 @@ vector<ComboAddress> SyncRes::getAddrs(const DNSName &qname, unsigned int depth,
     if(done) {
       if(j==1 && s_doIPv6) { // we got an A record, see if we have some AAAA lying around
 	vector<DNSRecord> cset;
-	if(t_RC->get(d_now.tv_sec, qname, QType(QType::AAAA), &cset, d_requestor) > 0) {
+	if(t_RC->get(d_now.tv_sec, qname, QType(QType::AAAA), false, &cset, d_requestor) > 0) {
 	  for(auto k=cset.cbegin();k!=cset.cend();++k) {
 	    if(k->d_ttl > (unsigned int)d_now.tv_sec ) {
 	      if (auto drc = std::dynamic_pointer_cast<AAAARecordContent>(k->d_content)) {
@@ -587,14 +587,14 @@ void SyncRes::getBestNSFromCache(const DNSName &qname, const QType& qtype, vecto
     LOG(prefix<<qname<<": Checking if we have NS in cache for '"<<subdomain<<"'"<<endl);
     vector<DNSRecord> ns;
     *flawedNSSet = false;
-    if(t_RC->get(d_now.tv_sec, subdomain, QType(QType::NS), &ns, d_requestor) > 0) {
+    if(t_RC->get(d_now.tv_sec, subdomain, QType(QType::NS), false, &ns, d_requestor) > 0) {
       for(auto k=ns.cbegin();k!=ns.cend(); ++k) {
         if(k->d_ttl > (unsigned int)d_now.tv_sec ) {
           vector<DNSRecord> aset;
 
           const DNSRecord& dr=*k;
 	  auto nrr = getRR<NSRecordContent>(dr);
-          if(nrr && (!nrr->getNS().isPartOf(subdomain) || t_RC->get(d_now.tv_sec, nrr->getNS(), s_doIPv6 ? QType(QType::ADDR) : QType(QType::A),
+          if(nrr && (!nrr->getNS().isPartOf(subdomain) || t_RC->get(d_now.tv_sec, nrr->getNS(), s_doIPv6 ? QType(QType::ADDR) : QType(QType::A), false,
                                                                     doLog() ? &aset : 0, d_requestor) > 5)) {
             bestns.push_back(dr);
             LOG(prefix<<qname<<": NS (with ip, or non-glue) in cache for '"<<subdomain<<"' -> '"<<nrr->getNS()<<"'"<<endl);
@@ -691,7 +691,7 @@ DNSName SyncRes::getBestNSNamesFromCache(const DNSName &qname, const QType& qtyp
   return subdomain;
 }
 
-bool SyncRes::doCNAMECacheCheck(const DNSName &qname, const QType &qtype, vector<DNSRecord>& ret, unsigned int depth, int &res)
+bool SyncRes::doCNAMECacheCheck(const DNSName &qname, const QType &qtype, vector<DNSRecord>& ret, unsigned int depth, bool needAuth, int &res)
 {
   string prefix;
   if(doLog()) {
@@ -708,7 +708,7 @@ bool SyncRes::doCNAMECacheCheck(const DNSName &qname, const QType &qtype, vector
   LOG(prefix<<qname<<": Looking for CNAME cache hit of '"<<qname<<"|CNAME"<<"'"<<endl);
   vector<DNSRecord> cset;
   vector<std::shared_ptr<RRSIGRecordContent>> signatures;
-  if(t_RC->get(d_now.tv_sec, qname,QType(QType::CNAME), &cset, d_requestor, &signatures) > 0) {
+  if(t_RC->get(d_now.tv_sec, qname,QType(QType::CNAME), needAuth, &cset, d_requestor, &signatures) > 0) {
 
     for(auto j=cset.cbegin() ; j != cset.cend() ; ++j) {
       if(j->d_ttl>(unsigned int) d_now.tv_sec) {
@@ -730,7 +730,7 @@ bool SyncRes::doCNAMECacheCheck(const DNSName &qname, const QType &qtype, vector
 
         if(!(qtype==QType(QType::CNAME))) { // perhaps they really wanted a CNAME!
           set<GetBestNSAnswer>beenthere;
-          res=doResolve(std::dynamic_pointer_cast<CNAMERecordContent>(j->d_content)->getTarget(), qtype, ret, depth+1, beenthere);
+          res=doResolve(std::dynamic_pointer_cast<CNAMERecordContent>(j->d_content)->getTarget(), qtype, ret, depth+1, beenthere, needAuth);
         }
         else
           res=0;
@@ -750,7 +750,7 @@ static const DNSName getLastLabel(const DNSName& qname)
 }
 
 
-bool SyncRes::doCacheCheck(const DNSName &qname, const QType &qtype, vector<DNSRecord>&ret, unsigned int depth, int &res)
+bool SyncRes::doCacheCheck(const DNSName &qname, const QType &qtype, vector<DNSRecord>&ret, unsigned int depth, bool needAuth, int &res)
 {
   bool giveNegative=false;
 
@@ -828,7 +828,7 @@ bool SyncRes::doCacheCheck(const DNSName &qname, const QType &qtype, vector<DNSR
   bool found=false, expired=false;
   vector<std::shared_ptr<RRSIGRecordContent>> signatures;
   uint32_t ttl=0;
-  if(t_RC->get(d_now.tv_sec, sqname, sqt, &cset, d_requestor, d_doDNSSEC ? &signatures : 0) > 0) {
+  if(t_RC->get(d_now.tv_sec, sqname, sqt, needAuth, &cset, d_requestor, d_doDNSSEC ? &signatures : 0) > 0) {
     LOG(prefix<<sqname<<": Found cache hit for "<<sqt.getName()<<": ");
     for(auto j=cset.cbegin() ; j != cset.cend() ; ++j) {
       LOG(j->d_content->getZoneRepresentation());
@@ -964,10 +964,12 @@ static void addNXNSECS(vector<DNSRecord>&ret, const vector<DNSRecord>& records)
  *  -1 in case of no results
  *  -2 when a FilterEngine Policy was hit
  *  rcode otherwise
+ *
+ * needAuth is needed here so it can be propagated to doResolve() in case we hit a CNAMEs
  */
 int SyncRes::doResolveAt(NsSet &nameservers, DNSName auth, bool flawedNSSet, const DNSName &qname, const QType &qtype,
                          vector<DNSRecord>&ret,
-                         unsigned int depth, set<GetBestNSAnswer>&beenthere)
+                         unsigned int depth, set<GetBestNSAnswer>&beenthere, bool needAuth) 
 {
   string prefix;
   if(doLog()) {
@@ -1438,7 +1440,7 @@ int SyncRes::doResolveAt(NsSet &nameservers, DNSName auth, bool flawedNSSet, con
         LOG(prefix<<qname<<": status=got a CNAME referral, starting over with "<<newtarget<<endl);
 
         set<GetBestNSAnswer> beenthere2;
-        return doResolve(newtarget, qtype, ret, depth + 1, beenthere2);
+        return doResolve(newtarget, qtype, ret, depth + 1, beenthere2, needAuth); 
       }
       if(lwr.d_rcode==RCode::NXDomain) {
         LOG(prefix<<qname<<": status=NXDOMAIN, we are done "<<(negindic ? "(have negative SOA)" : "")<<endl);

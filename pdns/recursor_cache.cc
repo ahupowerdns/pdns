@@ -31,18 +31,22 @@ unsigned int MemRecursorCache::bytes()
 }
 
 // returns -1 for no hits
-int MemRecursorCache::get(time_t now, const DNSName &qname, const QType& qt, vector<DNSRecord>* res, const ComboAddress& who, vector<std::shared_ptr<RRSIGRecordContent>>* signatures)
+int MemRecursorCache::get(time_t now, const DNSName &qname, const QType& qt, bool needAuth, vector<DNSRecord>* res, const ComboAddress& who, vector<std::shared_ptr<RRSIGRecordContent>>* signatures)
 {
   unsigned int ttd=0;
-  //  cerr<<"looking up "<< qname<<"|"+qt.getName()<<"\n";
+  static bool verbose=false;
+  
+  if(verbose)cerr<<"looking up "<< qname<<"|"+qt.getName()<<", needAuth="<<needAuth<<endl;
 
   if(!d_cachecachevalid || d_cachedqname!= qname) {
-    //    cerr<<"had cache cache miss"<<endl;
+    if(verbose)cerr<<"had cache cache miss"<<endl;
     d_cachedqname=qname;
     d_cachecache=d_cache.equal_range(tie(qname));
     d_cachecachevalid=true;
   }
-  //  else cerr<<"had cache cache hit!"<<endl;
+  else {
+    if(verbose)cerr<<"had cache cache hit!"<<endl;
+  }
 
   if(res)
     res->clear();
@@ -51,18 +55,18 @@ int MemRecursorCache::get(time_t now, const DNSName &qname, const QType& qt, vec
   if(d_cachecache.first!=d_cachecache.second) {
     for(cache_t::const_iterator i=d_cachecache.first; i != d_cachecache.second; ++i) {
       if(!i->d_netmask.empty()) {
-	//	cout<<"Had a subnet specific hit: "<<i->d_netmask.toString()<<", query was for "<<who.toString()<<": match "<<i->d_netmask.match(who)<<endl;
+	if(verbose)cout<<"Had a subnet specific hit: "<<i->d_netmask.toString()<<", query was for "<<who.toString()<<": match "<<i->d_netmask.match(who)<<endl;
 	haveSubnetSpecific=true;
       }
     }
     for(cache_t::const_iterator i=d_cachecache.first; i != d_cachecache.second; ++i)
-      if(i->d_ttd > now && ((i->d_qtype == qt.getCode() || qt.getCode()==QType::ANY ||
+      if((!needAuth || i->d_auth) && i->d_ttd > now && ((i->d_qtype == qt.getCode() || qt.getCode()==QType::ANY ||
 			    (qt.getCode()==QType::ADDR && (i->d_qtype == QType::A || i->d_qtype == QType::AAAA) )) 
 			    && (!haveSubnetSpecific || i->d_netmask.match(who)))
          ) {
 
 	ttd = i->d_ttd;	
-        //        cerr<<"Looking at "<<i->d_records.size()<<" records for this name"<<endl;
+        if(verbose)cerr<<"Looking at "<<i->d_records.size()<<" records for this name"<<endl;
 	for(auto k=i->d_records.begin(); k != i->d_records.end(); ++k) {
 	  if(res) {
 	    DNSRecord dr;
@@ -88,9 +92,10 @@ int MemRecursorCache::get(time_t now, const DNSName &qname, const QType& qt, vec
           break;
       }
 
-    //    cerr<<"time left : "<<ttd - now<<", "<< (res ? res->size() : 0) <<"\n";
+    if(verbose)cerr<<"time left : "<<ttd - now<<", "<< (res ? res->size() : 0) <<" answers, " << ((ttd < now) ? "expired" : "fresh")<<endl;
     return (int)ttd-now;
   }
+  if(verbose)cerr<<"No hits"<<endl;
   return -1;
 }
 
@@ -287,7 +292,7 @@ uint64_t MemRecursorCache::doDump(int fd)
     for(auto j=i->d_records.cbegin(); j != i->d_records.cend(); ++j) {
       count++;
       try {
-        fprintf(fp, "%s %d IN %s %s ; %s\n", i->d_qname.toString().c_str(), (int32_t)(i->d_ttd - now), DNSRecordContent::NumberToType(i->d_qtype).c_str(), (*j)->getZoneRepresentation().c_str(), i->d_netmask.empty() ? "" : i->d_netmask.toString().c_str());
+        fprintf(fp, "%s %d IN %s %s ; auth=%d %s\n", i->d_qname.toString().c_str(), (int32_t)(i->d_ttd - now), DNSRecordContent::NumberToType(i->d_qtype).c_str(), (*j)->getZoneRepresentation().c_str(), i->d_auth ? 1 : 0, i->d_netmask.empty() ? "" : i->d_netmask.toString().c_str());
       }
       catch(...) {
         fprintf(fp, "; error printing '%s'\n", i->d_qname.empty() ? "EMPTY" : i->d_qname.toString().c_str());

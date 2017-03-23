@@ -1325,7 +1325,7 @@ try
   if (ds.setCD) {
     requestHeader->cd = true;
   }
-
+  requestHeader->id = random();
   Socket sock(ds.remote.sin4.sin_family, SOCK_DGRAM);
   sock.setNonBlocking();
   if (!IsAnyAddress(ds.sourceAddr)) {
@@ -1341,7 +1341,14 @@ try
     return false;
   }
 
-  int ret=waitForRWData(sock.getHandle(), true, 1, 0);
+  int tries=0;
+  int ret;
+ retry:;
+  if(tries < 10)
+    ret=waitForRWData(sock.getHandle(), true, 1, 0);
+  else
+    ret=0;
+  
   if(ret < 0 || !ret) { // error, timeout, both are down!
     if (ret < 0) {
       ret = errno;
@@ -1363,13 +1370,13 @@ try
   if (reply.size() < sizeof(*responseHeader)) {
     if (g_verboseHealthChecks)
       infolog("Invalid health check response of size %d from backend %s, expecting at least %d", reply.size(), ds.getNameWithAddr(), sizeof(*responseHeader));
-    return false;
+    goto retry;
   }
 
   if (responseHeader->id != requestHeader->id) {
     if (g_verboseHealthChecks)
       infolog("Invalid health check response id %d from backend %s, expecting %d", responseHeader->id, ds.getNameWithAddr(), requestHeader->id);
-    return false;
+    goto retry;
   }
 
   if (!responseHeader->qr) {
@@ -1887,6 +1894,7 @@ try
 
   auto todo=setupLua(false, g_cmdLine.config);
 
+  
   if(g_cmdLine.locals.size()) {
     g_locals.clear();
     for(auto loc : g_cmdLine.locals)

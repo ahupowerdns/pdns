@@ -82,7 +82,7 @@ PROGRAM_LDFLAGS="$PIE_LDFLAGS $PROGRAM_LDFLAGS"
 AC_SUBST([PROGRAM_LDFLAGS])
 
 AC_SUBST([AM_CPPFLAGS],
-  ["AS_ESCAPE([-I$(top_builddir) -I$(top_srcdir)]) -Wall -O3 -pthread $BOOST_CPPFLAGS"]
+  ["AS_ESCAPE([-I$(top_builddir) -I$(top_srcdir)]) -Iext/libcuckoo -Wall -O3 -pthread $BOOST_CPPFLAGS"]
 )
 
 AC_CONFIG_FILES([Makefile

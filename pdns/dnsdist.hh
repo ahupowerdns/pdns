@@ -24,6 +24,7 @@
 #include "ext/luawrapper/include/LuaContext.hpp"
 #include <time.h>
 #include "misc.hh"
+#include "lock.hh"
 #include "iputils.hh"
 #include "dnsname.hh"
 #include <atomic>

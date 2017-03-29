@@ -26,7 +26,6 @@
 
 DNSDistPacketCache::DNSDistPacketCache(size_t maxEntries, uint32_t maxTTL, uint32_t minTTL, uint32_t tempFailureTTL, uint32_t staleTTL): d_maxEntries(maxEntries), d_maxTTL(maxTTL), d_tempFailureTTL(tempFailureTTL), d_minTTL(minTTL), d_staleTTL(staleTTL)
 {
-  pthread_rwlock_init(&d_lock, 0);
   /* we reserve maxEntries + 1 to avoid rehashing from occurring
      when we get to maxEntries, as it means a load factor of 1 */
   d_map.reserve(maxEntries + 1);
@@ -34,11 +33,6 @@ DNSDistPacketCache::DNSDistPacketCache(size_t maxEntries, uint32_t maxTTL, uint3
 
 DNSDistPacketCache::~DNSDistPacketCache()
 {
-  try {
-    WriteLock l(&d_lock);
-  }
-  catch(const PDNSException& pe) {
-  }
 }
 
 bool DNSDistPacketCache::cachedValueMatches(const CacheValue& cachedValue, const DNSName& qname, uint16_t qtype, uint16_t qclass, bool tcp)
@@ -79,20 +73,13 @@ void DNSDistPacketCache::insert(uint32_t key, const DNSName& qname, uint16_t qty
     }
   }
 
-  {
-    TryReadLock r(&d_lock);
-    if (!r.gotIt()) {
-      d_deferredInserts++;
-      return;
-    }
-    if (d_map.size() >= d_maxEntries) {
-      return;
-    }
+  if (d_map.size() >= d_maxEntries) {
+    return;
   }
 
   const time_t now = time(NULL);
   std::unordered_map<uint32_t,CacheValue>::iterator it;
-  bool result;
+
   time_t newValidity = now + minTTL;
   CacheValue newValue;
   newValue.qname = qname;
@@ -104,37 +91,24 @@ void DNSDistPacketCache::insert(uint32_t key, const DNSName& qname, uint16_t qty
   newValue.tcp = tcp;
   newValue.value = std::string(response, responseLen);
 
-  {
-    TryWriteLock w(&d_lock);
+  d_map.upsert(key, [&now, &qname, &qtype, &qclass, &tcp, &newValidity, &newValue, this](CacheValue& value) {
+      bool wasExpired = value.validity <= now;
+      /* in case of collision, don't override the existing entry
+         except if it has expired */
+      
+      if (!wasExpired && !cachedValueMatches(value, qname, qtype, qclass, tcp)) {
+        d_insertCollisions++;
+        return;
+      }
+      
+      /* if the existing entry had a longer TTD, keep it */
+      if (newValidity <= value.validity) {
+        return;
+      }
+      
+      value = newValue;
+    },  newValue);
 
-    if (!w.gotIt()) {
-      d_deferredInserts++;
-      return;
-    }
-
-    tie(it, result) = d_map.insert({key, newValue});
-
-    if (result) {
-      return;
-    }
-
-    /* in case of collision, don't override the existing entry
-       except if it has expired */
-    CacheValue& value = it->second;
-    bool wasExpired = value.validity <= now;
-
-    if (!wasExpired && !cachedValueMatches(value, qname, qtype, qclass, tcp)) {
-      d_insertCollisions++;
-      return;
-    }
-
-    /* if the existing entry had a longer TTD, keep it */
-    if (newValidity <= value.validity) {
-      return;
-    }
-
-    value = newValue;
-  }
 }
 
 bool DNSDistPacketCache::get(const DNSQuestion& dq, uint16_t consumed, uint16_t queryId, char* response, uint16_t* responseLen, uint32_t* keyOut, uint32_t allowExpired, bool skipAging)
@@ -146,94 +120,93 @@ bool DNSDistPacketCache::get(const DNSQuestion& dq, uint16_t consumed, uint16_t 
   time_t now = time(NULL);
   time_t age;
   bool stale = false;
-  {
-    TryReadLock r(&d_lock);
-    if (!r.gotIt()) {
-      d_deferredLookups++;
-      return false;
-    }
+  int ret=-1;
 
-    std::unordered_map<uint32_t,CacheValue>::const_iterator it = d_map.find(key);
-    if (it == d_map.end()) {
-      d_misses++;
-      return false;
-    }
-
-    const CacheValue& value = it->second;
+  bool found=d_map.find_fn(key, [&](const CacheValue& value) {
     if (value.validity < now) {
       if ((now - value.validity) >= static_cast<time_t>(allowExpired)) {
         d_misses++;
-        return false;
+        ret=false;
+        return;
       }
       else {
         stale = true;
       }
     }
-
+    
     if (*responseLen < value.len || value.len < sizeof(dnsheader)) {
-      return false;
+      ret = false;
+      return;
     }
-
+                      
     /* check for collision */
     if (!cachedValueMatches(value, *dq.qname, dq.qtype, dq.qclass, dq.tcp)) {
       d_lookupCollisions++;
-      return false;
+      ret=false;
+      return;
     }
-
+    
     memcpy(response, &queryId, sizeof(queryId));
     memcpy(response + sizeof(queryId), value.value.c_str() + sizeof(queryId), sizeof(dnsheader) - sizeof(queryId));
-
+                      
     if (value.len == sizeof(dnsheader)) {
       /* DNS header only, our work here is done */
       *responseLen = value.len;
       d_hits++;
-      return true;
+      ret = true;
+      return;
     }
-
+                      
     string dnsQName(dq.qname->toDNSString());
     const size_t dnsQNameLen = dnsQName.length();
     if (value.len < (sizeof(dnsheader) + dnsQNameLen)) {
-      return false;
+      ret=false;
+      return;
     }
-
+                      
     memcpy(response + sizeof(dnsheader), dnsQName.c_str(), dnsQNameLen);
     if (value.len > (sizeof(dnsheader) + dnsQNameLen)) {
       memcpy(response + sizeof(dnsheader) + dnsQNameLen, value.value.c_str() + sizeof(dnsheader) + dnsQNameLen, value.len - (sizeof(dnsheader) + dnsQNameLen));
     }
+    
     *responseLen = value.len;
+    ret=true;
     if (!stale) {
       age = now - value.added;
     }
     else {
       age = (value.validity - value.added) - d_staleTTL;
     }
-  }
+    
+    if (!skipAging) {
+      ageDNSPacket(response, *responseLen, age);
+    }
+    
+    d_hits++;
 
-  if (!skipAging) {
-    ageDNSPacket(response, *responseLen, age);
+    });
+  if(!found) {
+    d_misses++;
+    return false;
   }
-
-  d_hits++;
-  return true;
+  return ret;
 }
-
 /* Remove expired entries, until the cache has at most
    upTo entries in it.
 */
 void DNSDistPacketCache::purgeExpired(size_t upTo)
 {
   time_t now = time(NULL);
-  WriteLock w(&d_lock);
   if (upTo >= d_map.size()) {
     return;
   }
-
-  size_t toRemove = d_map.size() - upTo;
-  for(auto it = d_map.begin(); toRemove > 0 && it != d_map.end(); ) {
+  auto lt= d_map.lock_table();
+  size_t toRemove = lt.size() - upTo;
+  for(auto it = lt.begin(); toRemove > 0 && it != lt.end(); ) {
     const CacheValue& value = it->second;
 
     if (value.validity < now) {
-        it = d_map.erase(it);
+        it = lt.erase(it);
         --toRemove;
     } else {
       ++it;
@@ -245,28 +218,28 @@ void DNSDistPacketCache::purgeExpired(size_t upTo)
    entries in the cache */
 void DNSDistPacketCache::expunge(size_t upTo)
 {
-  WriteLock w(&d_lock);
-
   if (upTo >= d_map.size()) {
     return;
   }
 
-  size_t toRemove = d_map.size() - upTo;
-  auto beginIt = d_map.begin();
+  auto lt = d_map.lock_table();
+  size_t toRemove = lt.size() - upTo;
+  auto beginIt = lt.begin();
   auto endIt = beginIt;
   std::advance(endIt, toRemove);
-  d_map.erase(beginIt, endIt);
+  for(; beginIt != endIt; )
+    beginIt=lt.erase(beginIt);
 }
 
 void DNSDistPacketCache::expungeByName(const DNSName& name, uint16_t qtype, bool suffixMatch)
 {
-  WriteLock w(&d_lock);
-
-  for(auto it = d_map.begin(); it != d_map.end(); ) {
+  auto lt=d_map.lock_table();
+  
+  for(auto it = lt.begin(); it != lt.end(); ) {
     const CacheValue& value = it->second;
 
     if ((value.qname == name || (suffixMatch && value.qname.isPartOf(name))) && (qtype == QType::ANY || qtype == value.qtype)) {
-      it = d_map.erase(it);
+      it = lt.erase(it);
     } else {
       ++it;
     }
@@ -275,8 +248,7 @@ void DNSDistPacketCache::expungeByName(const DNSName& name, uint16_t qtype, bool
 
 bool DNSDistPacketCache::isFull()
 {
-    ReadLock r(&d_lock);
-    return (d_map.size() >= d_maxEntries);
+  return (d_map.size() >= d_maxEntries);
 }
 
 uint32_t DNSDistPacketCache::getMinTTL(const char* packet, uint16_t length)
@@ -305,12 +277,10 @@ uint32_t DNSDistPacketCache::getKey(const DNSName& qname, uint16_t consumed, con
 
 string DNSDistPacketCache::toString()
 {
-  ReadLock r(&d_lock);
   return std::to_string(d_map.size()) + "/" + std::to_string(d_maxEntries);
 }
 
 uint64_t DNSDistPacketCache::getEntriesCount()
 {
-  ReadLock r(&d_lock);
   return d_map.size();
 }

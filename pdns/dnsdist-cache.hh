@@ -23,7 +23,7 @@
 
 #include <atomic>
 #include <unordered_map>
-#include "lock.hh"
+#include "cuckoohash_map.hh"
 
 struct DNSQuestion;
 
@@ -71,8 +71,8 @@ private:
   static uint32_t getKey(const DNSName& qname, uint16_t consumed, const unsigned char* packet, uint16_t packetLen, bool tcp);
   static bool cachedValueMatches(const CacheValue& cachedValue, const DNSName& qname, uint16_t qtype, uint16_t qclass, bool tcp);
 
-  pthread_rwlock_t d_lock;
-  std::unordered_map<uint32_t,CacheValue> d_map;
+  cuckoohash_map<uint32_t, CacheValue> d_map;
+
   std::atomic<uint64_t> d_deferredLookups{0};
   std::atomic<uint64_t> d_deferredInserts{0};
   std::atomic<uint64_t> d_hits{0};

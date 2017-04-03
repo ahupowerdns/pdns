@@ -25,13 +25,10 @@
 #ifdef HAVE_CLOCK_GETTIME
 #include <time.h>
 
-#ifndef CLOCK_MONOTONIC_RAW
-#define CLOCK_MONOTONIC_RAW CLOCK_MONOTONIC
-#endif
 
 int gettime(struct timespec *tp, bool needRealTime)
 {
-	return clock_gettime(needRealTime ? CLOCK_REALTIME : CLOCK_MONOTONIC_RAW, tp);
+	return clock_gettime(needRealTime ? CLOCK_REALTIME : CLOCK_MONOTONIC, tp);
 }
 
 #else

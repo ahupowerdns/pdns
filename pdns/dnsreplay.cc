@@ -785,25 +785,44 @@ try
     return 0;
   unsigned int count=0;
   bool first = true;
+  double interQPS=0;
+  unsigned int lastSameCount=0;
+  struct pdns_timeval lastTS;
   for(;;) {
     if(g_pleaseQuit) {
       cerr<<"Interrupted from terminal"<<endl;
       break;
     }
-    if(!((once++)%100)) 
+    if(!((once++)%128)) 
       houseKeeping();
     
     struct timeval packet_ts;
     packet_ts.tv_sec = 0; 
     packet_ts.tv_usec = 0; 
-
+    
     while(packet_ts < mental_time) {
       if(!first && !pr.getUDPPacket()) // otherwise we miss the first packet
         goto out;
       first=false;
 
+      if(lastTS.tv_sec == pr.d_pheader.ts.tv_sec &&
+	 lastTS.tv_usec == pr.d_pheader.ts.tv_usec) {
+	lastSameCount++;
+	if(interQPS) {
+	  pr.d_pheader.ts.tv_usec = (long)(1000000.0*lastSameCount/interQPS);
+	  if(pr.d_pheader.ts.tv_usec > 1000000)
+	    pr.d_pheader.ts.tv_usec = 1000000;
+	}
+      }
+      else  {
+	lastTS = pr.d_pheader.ts;
+	interQPS = lastSameCount;
+	// cout<<"Set QPS to "<<interQPS<<endl;
+	lastSameCount=0;
+      }
       packet_ts.tv_sec = pr.d_pheader.ts.tv_sec;
       packet_ts.tv_usec = pr.d_pheader.ts.tv_usec;
+
 
       if(sendPacketFromPR(pr, remote, stamp))
         count++;

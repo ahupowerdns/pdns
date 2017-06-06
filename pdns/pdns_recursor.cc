@@ -139,7 +139,8 @@ static tcpListenSockets_t g_tcpListenSockets;   // shared across threads, but th
 static listenSocketsAddresses_t g_listenSocketsAddresses; // is shared across all threads right now
 static std::unordered_map<unsigned int, deferredAdd_t> deferredAdds;
 static set<int> g_fromtosockets; // listen sockets that use 'sendfromto()' mechanism
-static vector<ComboAddress> g_localQueryAddresses4, g_localQueryAddresses6;
+static vector<ComboAddress> g_localQueryAddresses4;
+static vector<Netmask> g_localQueryAddresses6;
 static AtomicCounter counter;
 static std::shared_ptr<SyncRes::domainmap_t> g_initialDomainMap; // new threads needs this to be setup
 static std::shared_ptr<NetmaskGroup> g_initialAllowFrom; // new thread needs to be setup with this
@@ -336,8 +337,9 @@ string GenUDPQueryResponse(const ComboAddress& dest, const string& query)
 }
 
 //! pick a random query local address
-ComboAddress getQueryLocalAddress(int family, uint16_t port)
+ComboAddress getQueryLocalAddress(int family, uint16_t port, bool* fromRange)
 {
+  *fromRange=false;
   ComboAddress ret;
   if(family==AF_INET) {
     if(g_localQueryAddresses4.empty())
@@ -349,8 +351,35 @@ ComboAddress getQueryLocalAddress(int family, uint16_t port)
   else {
     if(g_localQueryAddresses6.empty())
       ret = g_local6;
-    else
-      ret = g_localQueryAddresses6[dns_random(g_localQueryAddresses6.size())];
+    else {
+      const auto& mask = g_localQueryAddresses6[dns_random(g_localQueryAddresses6.size())];
+      
+
+      // to clear first bit, and with 2^63-1
+      // to clear first two bits, and with 2^62-1
+      
+      int bits=(128-mask.getBits());
+      cout<<"Have "<<bits<<" bits of random to play with"<<endl;
+      if(!bits)
+        return mask.getNetwork();
+      *fromRange=true;
+      const int one = 1;
+      setsockopt(fd, SOL_IP, IP_FREEBIND, &one, sizeof(one));
+
+
+      uint64_t rnd=(((((uint64_t)random())<<32) + random()));
+      if(bits!=64)
+        rnd=htobe64( rnd & ((1ULL<<bits)-1));
+
+      cout<<"Masked rnd: "<<makeHexDump(string((char*)&rnd, ((char*)&rnd)+8))<<endl;
+      
+      ret = mask.getNetwork();
+      uint64_t* ending = (uint64_t*) (((char*)(&ret.sin6.sin6_addr.s6_addr))+8);
+      cout<<"Ending: "<<makeHexDump(string((char*)ending, ((char*)ending)+8))<<endl;          
+      *ending ^= rnd;
+      cout<<"Ending: "<<makeHexDump(string((char*)ending, ((char*)ending)+8))<<endl;          
+      cout<<"Picked source address: "<<ret.toString()<<endl;
+    }
 
     ret.sin6.sin6_port = htons(port);
   }
@@ -481,8 +510,9 @@ public:
       else
         port = 1025 + dns_random(64510);
 
-      sin=getQueryLocalAddress(family, port); // does htons for us
+      sin=getQueryLocalAddress(family, port, ret); // does htons for us
 
+      
       if (::bind(ret, (struct sockaddr *)&sin, sin.getSocklen()) >= 0)
         break;
     }
@@ -2700,7 +2730,15 @@ static int serviceMain(int argc, char*argv[])
 
       stringtok(addrs, ::arg()["query-local-address6"], ", ;");
       for(const string& addr : addrs) {
-        g_localQueryAddresses6.push_back(ComboAddress(addr));
+        Netmask a(addr);
+        if(a.getBits() < 64) {
+          throw std::runtime_error("query-local-address6 does not support netmasks </64");
+          
+        }
+        ComboAddress ca=a.getNetwork();
+        ca.truncate(a.getBits());
+        Netmask b(ca, a.getBits());
+        g_localQueryAddresses6.push_back(b);
       }
     }
     else {
@@ -2713,7 +2751,7 @@ static int serviceMain(int argc, char*argv[])
     }
   }
   catch(std::exception& e) {
-    L<<Logger::Error<<"Assigning local query addresses: "<<e.what();
+    L<<Logger::Error<<"Assigning local query addresses: "<<e.what()<<endl;
     exit(99);
   }
 

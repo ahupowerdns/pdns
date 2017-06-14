@@ -327,10 +327,13 @@ void RPZIXFRTracker(const ComboAddress& master, const DNSName& zoneName, boost::
     vector<pair<vector<DNSRecord>, vector<DNSRecord> > > deltas;
 
     ComboAddress local(localAddress);
+    bool fromRange;
     if (local == ComboAddress())
-      local = getQueryLocalAddress(master.sin4.sin_family, 0);
+      local = getQueryLocalAddress(master.sin4.sin_family, 0, fromRange);
 
     try {
+      // XXX need to gtell getIXFRDeltas to do something with fromRange
+      // or teach getIXFRDeltas to use an FD we provide
       deltas = getIXFRDeltas(master, zoneName, dr, tt, &local, maxReceivedBytes);
     } catch(std::runtime_error& e ){
       L<<Logger::Warning<<e.what()<<endl;

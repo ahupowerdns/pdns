@@ -311,7 +311,10 @@ string GenUDPQueryResponse(const ComboAddress& dest, const string& query)
 {
   Socket s(dest.sin4.sin_family, SOCK_DGRAM);
   s.setNonBlocking();
-  ComboAddress local = getQueryLocalAddress(dest.sin4.sin_family, 0);
+  bool fromRange;
+  ComboAddress local = getQueryLocalAddress(dest.sin4.sin_family, 0, fromRange);
+  if(fromRange)
+    SSetsockopt(s.getHandle(), IPPROTO_IP, IP_FREEBIND, true);
   
   s.bind(local);
   s.connect(dest);
@@ -337,9 +340,9 @@ string GenUDPQueryResponse(const ComboAddress& dest, const string& query)
 }
 
 //! pick a random query local address
-ComboAddress getQueryLocalAddress(int family, uint16_t port, bool* fromRange)
+ComboAddress getQueryLocalAddress(int family, uint16_t port, bool& fromRange)
 {
-  *fromRange=false;
+  fromRange=false;
   ComboAddress ret;
   if(family==AF_INET) {
     if(g_localQueryAddresses4.empty())
@@ -362,9 +365,7 @@ ComboAddress getQueryLocalAddress(int family, uint16_t port, bool* fromRange)
       cout<<"Have "<<bits<<" bits of random to play with"<<endl;
       if(!bits)
         return mask.getNetwork();
-      *fromRange=true;
-      const int one = 1;
-      setsockopt(fd, SOL_IP, IP_FREEBIND, &one, sizeof(one));
+      fromRange=true;
 
 
       uint64_t rnd=(((((uint64_t)random())<<32) + random()));
@@ -510,7 +511,11 @@ public:
       else
         port = 1025 + dns_random(64510);
 
-      sin=getQueryLocalAddress(family, port, ret); // does htons for us
+      bool fromRange;
+      sin=getQueryLocalAddress(family, port, fromRange); // does htons for us
+      if(fromRange) {
+	SSetsockopt(ret, IPPROTO_IP, IP_FREEBIND, 1);
+      }
 
       
       if (::bind(ret, (struct sockaddr *)&sin, sin.getSocklen()) >= 0)

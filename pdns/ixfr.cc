@@ -26,9 +26,21 @@
 #include "dnssecinfra.hh"
 #include "tsigverifier.hh"
 
-// Returns pairs of "remove & add" vectors. If you get an empty remove, it means you got an AXFR!
+
 vector<pair<vector<DNSRecord>, vector<DNSRecord> > > getIXFRDeltas(const ComboAddress& master, const DNSName& zone, const DNSRecord& oursr, 
                                                                    const TSIGTriplet& tt, const ComboAddress* laddr, size_t maxReceivedBytes)
+{
+  Socket s(master.sin4.sin_family, SOCK_STREAM);
+  if(laddr)
+    s.bind(*laddr);
+  s.connect(master);
+  return getIXFRDeltas(s.getHandle(), master, zone, oursr, tt, maxReceivedBytes);
+}
+
+
+// Returns pairs of "remove & add" vectors. If you get an empty remove, it means you got an AXFR!
+vector<pair<vector<DNSRecord>, vector<DNSRecord> > > getIXFRDeltas(int fd, const ComboAddress& master, const DNSName& zone, const DNSRecord& oursr, 
+                                                                   const TSIGTriplet& tt, size_t maxReceivedBytes)
 {
   vector<pair<vector<DNSRecord>, vector<DNSRecord> > >  ret;
   vector<uint8_t> packet;
@@ -60,12 +72,7 @@ vector<pair<vector<DNSRecord>, vector<DNSRecord> > > getIXFRDeltas(const ComboAd
   string msg((const char*)&len, 2);
   msg.append((const char*)&packet[0], packet.size());
 
-  Socket s(master.sin4.sin_family, SOCK_STREAM);
-  //  cout<<"going to connect"<<endl;
-  if(laddr)
-    s.bind(*laddr);
-  s.connect(master);
-  //  cout<<"Connected"<<endl;
+  Socket s(fd); 
   s.writen(msg);
 
   // CURRENT MASTER SOA

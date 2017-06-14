@@ -57,14 +57,14 @@ typedef int ProtocolType; //!< Supported protocol types
 //! Representation of a Socket and many of the Berkeley functions available
 class Socket : public boost::noncopyable
 {
-  Socket(int fd)
+public:
+  explicit Socket(int fd)
   {
     d_socket = fd;
     d_buflen=4096;
     d_buffer=new char[d_buflen];
   }
 
-public:
   //! Construct a socket of specified address family and socket type.
   Socket(int af, int st, ProtocolType pt=0)
   {

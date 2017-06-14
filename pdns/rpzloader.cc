@@ -181,9 +181,12 @@ shared_ptr<SOARecordContent> loadRPZFromServer(const ComboAddress& master, const
     L<<Logger::Warning<<"With TSIG key '"<<tt.name<<"' of algorithm '"<<tt.algo<<"'"<<endl;
 
   ComboAddress local(localAddress);
+  bool fromRange=false;
   if (local == ComboAddress())
-    local = getQueryLocalAddress(master.sin4.sin_family, 0);
+    local = getQueryLocalAddress(master.sin4.sin_family, 0, fromRange);
 
+  // XXX pass fromRange to AXFRRetriever, or make AXFRRetriever run from a socket we made
+  
   AXFRRetriever axfr(master, zoneName, tt, &local, maxReceivedBytes);
   unsigned int nrecords=0;
   Resolver::res_t nop;

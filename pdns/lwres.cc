@@ -169,8 +169,10 @@ int asyncresolve(const ComboAddress& ip, const DNSName& domain, int type, bool d
       Socket s(ip.sin4.sin_family, SOCK_STREAM);
 
       s.setNonBlocking();
-      ComboAddress local = getQueryLocalAddress(ip.sin4.sin_family, 0);
-
+      bool fromRange;
+      ComboAddress local = getQueryLocalAddress(ip.sin4.sin_family, 0, fromRange);
+      if(fromRange)
+	SSetsockopt(s.getHandle(), IPPROTO_IP, IP_FREEBIND, 1);
       s.bind(local);
         
       s.connect(ip);

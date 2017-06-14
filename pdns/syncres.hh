@@ -913,7 +913,7 @@ extern uint16_t g_outgoingEDNSBufsize;
 
 std::string reloadAuthAndForwards();
 ComboAddress parseIPAndPort(const std::string& input, uint16_t port);
-ComboAddress getQueryLocalAddress(int family, uint16_t port, int fd);
+ComboAddress getQueryLocalAddress(int family, uint16_t port, bool& fromRange);
 typedef boost::function<void*(void)> pipefunc_t;
 void broadcastFunction(const pipefunc_t& func, bool skipSelf = false);
 void distributeAsyncFunction(const std::string& question, const pipefunc_t& func);

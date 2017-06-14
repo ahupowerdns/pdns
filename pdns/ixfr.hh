@@ -23,6 +23,11 @@
 #include "iputils.hh"
 #include "dnsparser.hh"
 
+//! retrieve IXFR deltas from master, from a local address
 vector<pair<vector<DNSRecord>, vector<DNSRecord> > >   getIXFRDeltas(const ComboAddress& master, const DNSName& zone, 
                                                                      const DNSRecord& sr, const TSIGTriplet& tt=TSIGTriplet(),
                                                                      const ComboAddress* laddr=0, size_t maxReceivedBytes=0);
+
+//! retrieve IXFR deltas over a ready to use socket (which we close for you when we are done)
+vector<pair<vector<DNSRecord>, vector<DNSRecord> > > getIXFRDeltas(int fd, const ComboAddress& master, const DNSName& zone, const DNSRecord& oursr, 
+                                                                   const TSIGTriplet& tt=TSIGTriplet(), size_t maxReceivedBytes=0);

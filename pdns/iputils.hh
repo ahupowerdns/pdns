@@ -112,7 +112,7 @@ union ComboAddress {
       return false;
     
     if(sin4.sin_family == AF_INET)
-      return sin4.sin_addr.s_addr < rhs.sin4.sin_addr.s_addr;
+      return htonl(sin4.sin_addr.s_addr) < htonl(rhs.sin4.sin_addr.s_addr);
     else
       return memcmp(&sin6.sin6_addr.s6_addr, &rhs.sin6.sin6_addr.s6_addr, sizeof(sin6.sin6_addr.s6_addr)) < 0;
   }
@@ -149,7 +149,7 @@ union ComboAddress {
       if(a.sin4.sin_family > b.sin4.sin_family)
         return false;
       if(a.sin4.sin_family == AF_INET)
-        return a.sin4.sin_addr.s_addr < b.sin4.sin_addr.s_addr;
+        return htonl(a.sin4.sin_addr.s_addr) < htonl(b.sin4.sin_addr.s_addr);
       else
         return memcmp(&a.sin6.sin6_addr.s6_addr, &b.sin6.sin6_addr.s6_addr, sizeof(a.sin6.sin6_addr.s6_addr)) < 0;
     }

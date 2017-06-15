@@ -116,6 +116,7 @@ int asyncresolve(const ComboAddress& ip, const DNSName& domain, int type, bool d
 
   string ping;
   bool weWantEDNSSubnet=false;
+  Netmask origmask;
   if(EDNS0Level) { 
     DNSPacketWriter::optvect_t opts;
     if(srcmask) {
@@ -123,6 +124,7 @@ int asyncresolve(const ComboAddress& ip, const DNSName& domain, int type, bool d
       eo.source = *srcmask;
       //      cout<<"Adding request mask: "<<eo.source.toString()<<endl;
       opts.push_back(make_pair(8, makeEDNSSubnetOptsString(eo)));
+      origmask = *srcmask;
       srcmask=boost::optional<Netmask>(); // this is also our return value
       weWantEDNSSubnet=true;
     }
@@ -250,6 +252,11 @@ int asyncresolve(const ComboAddress& ip, const DNSName& domain, int type, bool d
       lwr->d_haveEDNS = true;
 
       if(weWantEDNSSubnet) {
+	// surprise, you got it
+	srcmask = origmask;
+	//	cout<<"Stuffing "<<origmask.toString()<<endl;
+#if 0
+	
         for(const auto& opt : edo.d_options) {
           if(opt.first==8) {
             EDNSSubnetOpts reso;
@@ -260,6 +267,7 @@ int asyncresolve(const ComboAddress& ip, const DNSName& domain, int type, bool d
             }
           }
         }
+#endif
       }
     }
         

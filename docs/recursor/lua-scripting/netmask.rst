@@ -72,7 +72,7 @@ NetMaskGroups are more powerful than plain Netmasks.
             print("Intercepting query from ", dq.remoteaddr)
         end
 
-    Prefixing a mask with ``!`` excludes that mask from matching.
+   Prefixing a mask with ``!`` excludes that mask from matching.
 
 .. classmethod:: NetMaskGroup:addMask(mask)
 

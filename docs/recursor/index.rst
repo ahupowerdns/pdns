@@ -26,10 +26,13 @@ Notable features
     :glob:
 
     getting-started
+    metrics
     dnssec
     lua-config/index
     lua-scripting/index
     dns64
+    security
     settings
     manpages/*
+    security-advisories/index
     appendices/*

@@ -9,18 +9,27 @@ Synopsys
 Description
 -----------
 
-:program:`rec_control` allows the operator to control a running instance of
-the pdns_recursor.
+:program:`rec_control` allows the operator to query and control a running
+instance of the PowerDNS Recursor.
+
+:program:`rec_control` talks to the recursor via a the 'controlsocket'. Which
+is usually located in ``/var/run`` . The *--socket-dir* or the *--config-dir*
+and *--config-name* switches control to which process :program:`rec_control`
+connects.
 
 Examples
 --------
-To stop the recursor by hand, run:
+To see if the Recursor is alive, run::
 
-``# rec_control quit``
+  # rec_control ping
 
-To dump the cache to disk, execute:
+To stop the recursor by hand, run::
 
-``# rec_control dump-cache /tmp/the-cache``
+  # rec_control quit
+
+To dump the cache to disk, execute::
+
+  # rec_control dump-cache /tmp/the-cache
 
 Options
 -------
@@ -60,6 +69,11 @@ dump-cache *FILENAME*
     PowerDNS will refuse to overwrite it. While dumping, the recursor will not
     answer questions.
 
+    Typical PowerDNS Recursors run multiple threads, therefore you'll see
+    duplicate, different entries for the same domains. The negative cache is
+    also dumped to the same file. The per-thread positive and negative cache
+    dumps are separated with an appropriate comment.
+
 dump-edns *FILENAME*
     Dumps the EDNS status to the filename mentioned. This file should not exist
     already, PowerDNS will refuse to overwrite it. While dumping, the recursor
@@ -68,11 +82,12 @@ dump-edns *FILENAME*
 dump-nsspeeds *FILENAME*
     Dumps the nameserver speed statistics to the *FILENAME* mentioned. This
     file should not exist already, PowerDNS will refuse to overwrite it. While
-    dumping, the recursor will not answer questions.
+    dumping, the recursor will not answer questions. Statistics are kept per
+    thread, and the dumps end up in the same file.
 
 get *STATISTIC* [*STATISTIC*]...
     Retrieve a statistic. For items that can be queried, see
-    <http://doc.powerdns.com/md/recursor/stats/>
+    :doc:`../metrics`
 
 get-all
     Retrieve all known statistics.
@@ -90,7 +105,8 @@ get-qtypelist
     Retrieves QType statistics. Queries from cache aren't being counted yet.
 
 help
-    Shows a list of supported commands.
+    Shows a list of supported commands understood by the running
+    :program:`pdns_recursor`
 
 ping
     Check if server is alive.
@@ -181,7 +197,7 @@ trace-regex *REGEX*
     '\.nl\.$|\.de\.$'.
 
 unload-lua-script
-    Unloads Lua script.
+    Unloads Lua script if one was loaded.
 
 version
     Report running version.
@@ -193,6 +209,11 @@ wipe-cache *DOMAIN* [*DOMAIN*] [...]
     *DOMAIN* can be suffixed with a '$'. to delete the whole tree from the
     cache. i.e. 'powerdns.com$' will remove all cached entries under and
     including the powerdns.com name.
+
+    **Note**: this command also wipes the negative cache.
+
+    **Warning**: Don't just wipe "www.somedomain.com", its NS records or CNAME
+    target may still be undesired, so wipe "somedomain.com" as well.
 
 See also
 --------

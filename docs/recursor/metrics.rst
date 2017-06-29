@@ -166,6 +166,14 @@ dont-outqueries
 ^^^^^^^^^^^^^^^
 number of outgoing queries dropped because of   :ref:`setting-dont-query` setting (since 3.3)
 
+ecs-queries
+^^^^^^^^^^^
+number of outgoing queries adorned with an EDNS Client Subnet option (since 4.1)
+
+ecs-responses
+^^^^^^^^^^^^^
+number of responses received from authoritative servers with an EDNS Client Subnet option we used (since 4.1)
+
 edns-ping-matches
 ^^^^^^^^^^^^^^^^^
 number of servers that sent a valid EDNS PING   response

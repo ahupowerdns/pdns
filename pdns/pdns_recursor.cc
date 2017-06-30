@@ -1162,12 +1162,15 @@ static void startDoResolve(void *p)
       if(sendmsg(dc->d_socket, &msgh, 0) < 0 && g_logCommonErrors) 
         L<<Logger::Warning<<"Sending UDP reply to client "<<dc->d_remote.toStringWithPort()<<" failed with: "<<strerror(errno)<<endl;
       if(!SyncRes::s_nopacketcache && !variableAnswer && !sr.wasVariable() ) {
-        t_packetCache->insertResponsePacket(dc->d_tag, dc->d_qhash, dc->d_mdp.d_qname, dc->d_mdp.d_qtype, dc->d_mdp.d_qclass,
-                                            string((const char*)&*packet.begin(), packet.size()),
-                                            g_now.tv_sec,
-                                            pw.getHeader()->rcode == RCode::ServFail ? SyncRes::s_packetcacheservfailttl :
-                                            min(minTTL,SyncRes::s_packetcachettl),
-                                            &pbMessage);
+	if(minTTL > 1) {
+	  minTTL-=1;
+	  t_packetCache->insertResponsePacket(dc->d_tag, dc->d_qhash, dc->d_mdp.d_qname, dc->d_mdp.d_qtype, dc->d_mdp.d_qclass,
+					      string((const char*)&*packet.begin(), packet.size()),
+					      g_now.tv_sec,
+					      pw.getHeader()->rcode == RCode::ServFail ? SyncRes::s_packetcacheservfailttl :
+					      min(minTTL,SyncRes::s_packetcachettl),
+					      &pbMessage);
+	}
       }
       //      else cerr<<"Not putting in packet cache: "<<sr.wasVariable()<<endl;
     }
@@ -1238,6 +1241,15 @@ static void startDoResolve(void *p)
     g_stats.avgLatencyUsec=(1-1.0/g_latencyStatSize)*g_stats.avgLatencyUsec + (float)newLat/g_latencyStatSize;
     // no worries, we do this for packet cache hits elsewhere
     //    cout<<dc->d_mdp.d_qname<<"\t"<<MT->getUsec()<<"\t"<<sr.d_outqueries<<endl;
+
+    if(0 && !sr.d_refetchlist.empty()) {
+      //      cerr<<"Have "<<sr.d_refetchlist.size()<<" items to refetch"<<endl;
+      sr.d_refetchmargin=5;
+      for(const auto& p : sr.d_refetchlist)
+	sr.beginResolve(p.first, QType(p.second), 1, ret);
+      g_stats.refetches++;
+    }
+    
     delete dc;
     dc=0;
   }
@@ -1260,6 +1272,10 @@ static void startDoResolve(void *p)
     } catch(...) {}
 
     L<<endl;
+    delete dc;
+  }
+  catch(ImmediateServFailException &e) {
+    L<<Logger::Error<<"Immediate servfail for "<< makeLoginfo(dc) <<endl;
     delete dc;
   }
   catch(...) {

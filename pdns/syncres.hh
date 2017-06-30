@@ -686,7 +686,8 @@ public:
   unsigned int d_unreachables;
   unsigned int d_totUsec;
   ComboAddress d_requestor;
-
+  set<pair<DNSName, uint16_t>> d_refetchlist;
+  int d_refetchmargin{0};
 private:
 
   static std::unordered_set<DNSName> s_delegationOnly;
@@ -885,6 +886,7 @@ struct RecursorStats
   std::atomic<uint64_t> packetCacheHits;
   std::atomic<uint64_t> noPacketError;
   std::atomic<uint64_t> ignoredCount;
+  std::atomic<uint64_t> refetches;
   time_t startupTime;
   std::atomic<uint64_t> dnssecQueries;
   unsigned int maxMThreadStackUsage;

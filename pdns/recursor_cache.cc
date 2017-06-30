@@ -220,9 +220,10 @@ int32_t MemRecursorCache::get(time_t now, const DNSName &qname, const QType& qt,
         break;
     }
 
-    // cerr<<"time left : "<<ttd - now<<", "<< (res ? res->size() : 0) <<"\n";
+    //cerr<<"time left : "<<ttd - now<<", "<< (res ? res->size() : 0) <<"\n";
     return static_cast<int32_t>(ttd-now);
   }
+  //  cerr<<"Returning -1"<<endl;
   return -1;
 }
 

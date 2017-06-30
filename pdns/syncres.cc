@@ -974,8 +974,11 @@ bool SyncRes::doCacheCheck(const DNSName &qname, const QType &qtype, vector<DNSR
   vector<std::shared_ptr<DNSRecord>> authorityRecs;
   uint32_t ttl=0;
   bool wasCachedAuth;
-  if(t_RC->get(d_now.tv_sec, sqname, sqt, d_requireAuthData, &cset, d_incomingECSFound ? d_incomingECSNetwork : d_requestor, d_doDNSSEC ? &signatures : nullptr, d_doDNSSEC ? &authorityRecs : nullptr, &d_wasVariable, &cachedState, &wasCachedAuth) > 0) {
-
+  int cttl;
+  if((cttl=t_RC->get(d_now.tv_sec, sqname, sqt, d_requireAuthData, &cset, d_incomingECSFound ? d_incomingECSNetwork : d_requestor, d_doDNSSEC ? &signatures : nullptr, d_doDNSSEC ? &authorityRecs : nullptr, &d_wasVariable, &cachedState, &wasCachedAuth)) > d_refetchmargin) {
+    if(cttl < 5)
+      d_refetchlist.insert({sqname, sqt.getCode()});
+    
     LOG(prefix<<sqname<<": Found cache hit for "<<sqt.getName()<<": ");
 
     if (validationEnabled() && sqt != QType::DNSKEY && wasCachedAuth && cachedState == Indeterminate && d_requireAuthData) {
@@ -1039,7 +1042,10 @@ bool SyncRes::doCacheCheck(const DNSName &qname, const QType &qtype, vector<DNSR
       return true;
     }
     else
-      LOG(prefix<<qname<<": cache had only stale entries"<<endl);
+      LOG(prefix<<qname<<": cache had only stale entries (cttl= "<<cttl<<")"<<endl);
+  }
+  else {
+    LOG(prefix<<qname<<": cache replied negatively (cttl= "<<cttl<<")"<<endl);
   }
 
   return false;

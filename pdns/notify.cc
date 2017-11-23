@@ -59,34 +59,51 @@ void usage() {
 int main(int argc, char** argv)
 try
 {
+  po::options_description desc("Allowed options");
+  desc.add_options()
+    ("help,h", "produce help message")
+    ("version", "show version number")
+    ("source", po::value<string>()->default_value(""), "Source to send notification packet from");
+  
+  po::options_description alloptions;
+  po::options_description hidden("hidden options");
+  hidden.add_options()
+    ("destination", po::value<string>(), "Destionation of notification packet")
+    ("domain", po::value<string>(), "Domain to notify for");
 
-  for(int n=1 ; n < argc; ++n) {
-    if ((string) argv[n] == "--help") {
-      usage();
-      return EXIT_SUCCESS;
-    }
+  alloptions.add(desc).add(hidden);
+  po::positional_options_description p;
+  p.add("destination", 1);
+  p.add("zone", 1);
 
-    if ((string) argv[n] == "--version") {
-      cerr<<"notify "<<VERSION<<endl;
-      return EXIT_SUCCESS;
-    }
+  po::store(po::command_line_parser(argc, argv).options(alloptions).positional(p).run(), g_vm);
+  po::notify(g_vm);
+
+
+  if(g_vm.count("help") || !g_vm.count("destination") || !g_vm.count("domain")) {
+    cout << "Usage: pdns_notify [OPTIONS] destination-ip domain"<<endl;
+    cout<<desc<<endl;
+    return EXIT_SUCCESS;
+  }
+  
+  if (g_vm.count("version")) {
+    cerr<<"notify "<<VERSION<<endl;
+    return EXIT_SUCCESS;
   }
 
-  if(argc!=3) {
-    usage();
-    exit(1);
-  }
-
-  int sock = socket(AF_INET, SOCK_DGRAM, 0);
+  ComboAddress pdns(g_vm["destination"].as<string>(), 53);
+  
+  int sock = socket(pdns.sin4.sin_family, SOCK_DGRAM, 0);
   if(sock < 0)
     throw runtime_error("Creating socket for incoming packets: "+stringerror());
 
 
- // ComboAddress local("127.0.0.1", (int)0);
-//  if(::bind(sock, (struct sockaddr*) &local, local.getSocklen()) < 0) 
-//    throw runtime_error("Failed to bind local socket to address "+local.toString()+": "+stringerror());
+  if(g_vm.count("source")) {
+    ComboAddress local(g_vm["source"].as<string>(), (int)0);
+    if(::bind(sock, (struct sockaddr*) &local, local.getSocklen()) < 0) 
+      throw runtime_error("Failed to bind local socket to address "+local.toString()+": "+stringerror());
+  }
 
-  ComboAddress pdns(argv[1], 53);
   if(connect(sock, (struct sockaddr*) &pdns, pdns.getSocklen()) < 0) 
     throw runtime_error("Failed to connect PowerDNS socket to address "+pdns.toString()+": "+stringerror());
   

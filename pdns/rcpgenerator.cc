@@ -345,7 +345,7 @@ void RecordTextReader::xfrText(string& val, bool multi, bool lenField)
     skipSpaces();
     if(d_string[d_pos]!='"') { // special case 'plenus' - without quotes
       string::size_type pos = d_pos;
-      while(pos != d_end && isalnum(d_string[pos]))
+      while(pos != d_end && !isspace(d_string[pos]) && d_string[pos]!='"')
         pos++;
       if(pos == d_end) {
         val.append(1, '"');

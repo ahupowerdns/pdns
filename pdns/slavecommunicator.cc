@@ -718,7 +718,7 @@ void CommunicatorClass::addTrySuperMasterRequest(DNSPacket *p)
 {
   Lock l(&d_lock);
   DNSPacket ours = *p;
-  if(d_potentialsupermasters.insert(ours).second())
+  if(d_potentialsupermasters.insert(ours).second)
     d_any_sem.post(); // kick the loop!
 }
 

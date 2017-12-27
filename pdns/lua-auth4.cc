@@ -6,7 +6,7 @@
 #include "namespaces.hh"
 #include "ednssubnet.hh"
 #include <unordered_set>
-
+#include "arguments.hh"
 AuthLua4::AuthLua4() { prepareContext(); }
 
 #if !defined(HAVE_LUA)
@@ -23,7 +23,7 @@ AuthLua4::~AuthLua4() { }
 #include "ext/luawrapper/include/LuaContext.hpp"
 
 void AuthLua4::postPrepareContext() {
-  stubParseResolveConf();
+  stubParseResolveConf(::arg()["resolver"]);
 
   d_lw->writeFunction("resolve", [](const std::string& qname, uint16_t qtype) {
       std::vector<DNSZoneRecord> ret;

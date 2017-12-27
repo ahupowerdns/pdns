@@ -1,17 +1,21 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
-
+#ifdef PKGLIBDIR
 #include "logger.hh"
-#include "arguments.hh"
-#include "version.hh"
+#include "dns_random.hh"
+#else
+#include "dolog.hh"
+#include <sodium.h>
+#endif
+
 #include "misc.hh"
 
 #include "sstuff.hh"
 #include "dnswriter.hh"
-#include "dns_random.hh"
+
+#include <fstream>
 #include "namespaces.hh"
-#include "statbag.hh"
 #include "stubresolver.hh"
 
 // s_resolversForStub contains the ComboAddresses that are used by
@@ -24,7 +28,11 @@ static vector<ComboAddress> s_resolversForStub;
 bool resolversDefined()
 {
   if (s_resolversForStub.empty()) {
+#ifdef PKGLIBDIR
     L<<Logger::Warning<<"No upstream resolvers configured, stub resolving (including secpoll and ALIAS) impossible."<<endl;
+#else
+    warnlog("No upstream resolvers configured, security poll impossible");
+#endif
     return false;
   }
   return true;
@@ -36,11 +44,11 @@ bool resolversDefined()
  * If that doesn't work, parse /etc/resolv.conf and add those nameservers to
  * s_resolversForStub.
  */
-void stubParseResolveConf()
+void stubParseResolveConf(const std::string& config)
 {
-  if(::arg().mustDo("resolver")) {
+  if(config.empty()) { 
     vector<string> parts;
-    stringtok(parts, ::arg()["resolver"], " ,\t");
+    stringtok(parts, config, " ,\t");
     for (const auto& addr : parts)
       s_resolversForStub.push_back(ComboAddress(addr, 53));
   }
@@ -86,14 +94,18 @@ int stubDoResolve(const DNSName& qname, uint16_t qtype, vector<DNSZoneRecord>& r
   vector<uint8_t> packet;
 
   DNSPacketWriter pw(packet, qname, qtype);
+#ifdef PKGLIBDIR
   pw.getHeader()->id=dns_random(0xffff);
+#else
+  pw.getHeader()->id=randombytes_uniform(0xffff);
+#endif
   pw.getHeader()->rd=1;
 
   string msg ="Doing stub resolving, using resolvers: ";
   for (const auto& server : s_resolversForStub) {
     msg += server.toString() + ", ";
   }
-  L<<Logger::Debug<<msg.substr(0, msg.length() - 2)<<endl;
+  //  L<<Logger::Debug<<msg.substr(0, msg.length() - 2)<<endl;
 
   for(const ComboAddress& dest :  s_resolversForStub) {
     Socket sock(dest.sin4.sin_family, SOCK_DGRAM);
@@ -129,7 +141,7 @@ int stubDoResolve(const DNSName& qname, uint16_t qtype, vector<DNSZoneRecord>& r
         ret.push_back(zrr);
       }
     }
-    L<<Logger::Debug<<"Question got answered by "<<dest.toString()<<endl;
+    //    L<<Logger::Debug<<"Question got answered by "<<dest.toString()<<endl;
     return mdp.d_header.rcode;
   }
   return RCode::ServFail;

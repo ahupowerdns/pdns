@@ -23,6 +23,6 @@
 #include "namespaces.hh"
 #include "dnsparser.hh"
 
-void stubParseResolveConf();
+void stubParseResolveConf(const std::string& config);
 bool resolversDefined();
 int stubDoResolve(const DNSName& qname, uint16_t qtype, vector<DNSZoneRecord>& ret);

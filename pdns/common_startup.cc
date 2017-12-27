@@ -487,7 +487,7 @@ void mainthread()
    PC.setMaxEntries(::arg().asNum("max-packet-cache-entries"));
    QC.setMaxEntries(::arg().asNum("max-cache-entries"));
 
-   stubParseResolveConf();
+   stubParseResolveConf(::arg()["resolver"]);
 
    if(!::arg()["chroot"].empty()) {
 #ifdef HAVE_SYSTEMD

@@ -47,7 +47,7 @@ try
 
   reportAllTypes();
   dns_random_init("0123456789abcdef");
-  stubParseResolveConf();
+  stubParseResolveConf(::arg()["resolver"]);
 
   vector<DNSZoneRecord> ret;
 

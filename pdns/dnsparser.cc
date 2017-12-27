@@ -26,62 +26,55 @@
 
 #include "namespaces.hh"
 
-class UnknownRecordContent : public DNSRecordContent
-{
-public:
-  UnknownRecordContent(const DNSRecord& dr, PacketReader& pr) 
+UnknownRecordContent::UnknownRecordContent(const DNSRecord& dr, PacketReader& pr) 
     : d_dr(dr)
-  {
-    pr.copyRecord(d_record, dr.d_clen);
-  }
+{
+  pr.copyRecord(d_record, dr.d_clen);
+}
 
-  UnknownRecordContent(const string& zone) 
-  {
-    // parse the input
-    vector<string> parts;
-    stringtok(parts, zone);
-    if(parts.size()!=3 && !(parts.size()==2 && equals(parts[1],"0")) )
-      throw MOADNSException("Unknown record was stored incorrectly, need 3 fields, got "+std::to_string(parts.size())+": "+zone );
-    const string& relevant=(parts.size() > 2) ? parts[2] : "";
-    unsigned int total=pdns_stou(parts[1]);
-    if(relevant.size() % 2 || relevant.size() / 2 != total)
-      throw MOADNSException((boost::format("invalid unknown record length: size not equal to length field (%d != 2 * %d)") % relevant.size() % total).str());
-    string out;
-    out.reserve(total+1);
-    for(unsigned int n=0; n < total; ++n) {
-      int c;
-      sscanf(relevant.c_str()+2*n, "%02x", &c);
-      out.append(1, (char)c);
-    }
-
-    d_record.insert(d_record.end(), out.begin(), out.end());
+UnknownRecordContent::UnknownRecordContent(const string& zone) 
+{
+  // parse the input
+  vector<string> parts;
+  stringtok(parts, zone);
+  if(parts.size()!=3 && !(parts.size()==2 && equals(parts[1],"0")) )
+    throw MOADNSException("Unknown record was stored incorrectly, need 3 fields, got "+std::to_string(parts.size())+": "+zone );
+  const string& relevant=(parts.size() > 2) ? parts[2] : "";
+  unsigned int total=pdns_stou(parts[1]);
+  if(relevant.size() % 2 || relevant.size() / 2 != total)
+    throw MOADNSException((boost::format("invalid unknown record length: size not equal to length field (%d != 2 * %d)") % relevant.size() % total).str());
+  string out;
+  out.reserve(total+1);
+  for(unsigned int n=0; n < total; ++n) {
+    int c;
+    sscanf(relevant.c_str()+2*n, "%02x", &c);
+    out.append(1, (char)c);
   }
+  
+  d_record.insert(d_record.end(), out.begin(), out.end());
+}
 
-  string getZoneRepresentation(bool noDot) const override
-  {
-    ostringstream str;
-    str<<"\\# "<<(unsigned int)d_record.size()<<" ";
-    char hex[4];
-    for(size_t n=0; n<d_record.size(); ++n) {
-      snprintf(hex,sizeof(hex)-1, "%02x", d_record.at(n));
-      str << hex;
-    }
-    return str.str();
+string UnknownRecordContent::getZoneRepresentation(bool noDot) const 
+{
+  ostringstream str;
+  str<<"\\# "<<(unsigned int)d_record.size()<<" ";
+  char hex[4];
+  for(size_t n=0; n<d_record.size(); ++n) {
+    snprintf(hex,sizeof(hex)-1, "%02x", d_record.at(n));
+    str << hex;
   }
+  return str.str();
+}
 
-  void toPacket(DNSPacketWriter& pw) override
-  {
-    pw.xfrBlob(string(d_record.begin(),d_record.end()));
-  }
+void UnknownRecordContent::toPacket(DNSPacketWriter& pw) 
+{
+  pw.xfrBlob(string(d_record.begin(),d_record.end()));
+}
 
-  uint16_t getType() const override
-  {
-    return d_dr.d_type;
-  }
-private:
-  DNSRecord d_dr;
-  vector<uint8_t> d_record;
-};
+uint16_t UnknownRecordContent::getType() const 
+{
+  return d_dr.d_type;
+}
 
 shared_ptr<DNSRecordContent> DNSRecordContent::unserialize(const DNSName& qname, uint16_t qtype, const string& serialized)
 {

@@ -396,4 +396,18 @@ std::shared_ptr<T> getRR(const DNSRecord& dr)
   return std::dynamic_pointer_cast<T>(dr.d_content);
 }
 
+class UnknownRecordContent : public DNSRecordContent
+{
+public:
+  UnknownRecordContent(const DNSRecord& dr, PacketReader& pr);
+  UnknownRecordContent(const string& zone) ;
+  string getZoneRepresentation(bool noDot) const override;
+  void toPacket(DNSPacketWriter& pw) override;
+  uint16_t getType() const override;
+  vector<uint8_t> d_record;
+private:
+  DNSRecord d_dr;
+};
+
+
 #endif

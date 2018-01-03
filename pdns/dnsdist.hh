@@ -764,7 +764,7 @@ extern uint32_t g_hashperturb;
 extern bool g_useTCPSinglePipe;
 extern std::atomic<uint16_t> g_downstreamTCPCleanupInterval;
 extern size_t g_udpVectorSize;
-
+extern std::string g_resolver;
 struct ConsoleKeyword {
   std::string name;
   bool function;
@@ -856,3 +856,4 @@ bool encryptResponse(char* response, uint16_t* responseLen, size_t responseSize,
 extern bool g_snmpEnabled;
 extern bool g_snmpTrapsEnabled;
 extern DNSDistSNMPAgent* g_snmpAgent;
+void doSecPoll(bool first);

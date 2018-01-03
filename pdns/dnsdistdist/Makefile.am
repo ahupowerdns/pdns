@@ -110,12 +110,14 @@ dnsdist_SOURCES = \
 	protobuf.cc protobuf.hh \
 	qtype.cc qtype.hh \
 	remote_logger.cc remote_logger.hh \
+	secpoll.cc \
 	selectmplexer.cc \
 	sholder.hh \
 	snmp-agent.cc snmp-agent.hh \
 	sodcrypto.cc sodcrypto.hh \
 	sstuff.hh \
 	statnode.cc statnode.hh \
+	stubresolver.cc stubresolver.hh \
 	ext/luawrapper/include/LuaContext.hpp \
 	ext/json11/json11.cpp \
 	ext/json11/json11.hpp \

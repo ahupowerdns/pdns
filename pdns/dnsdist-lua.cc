@@ -615,6 +615,13 @@ void setupLuaConfig(bool client)
       }
     });
 
+  g_lua.writeFunction("setResolver", [](const std::string& resolver) {
+      if (!g_configurationDone) 
+        g_resolver=resolver;
+      else
+        g_outputBuffer="Resolver can't be changed at runtime";
+    });
+  
   g_lua.writeFunction("clearQueryCounters", []() {
       unsigned int size{0};
       {

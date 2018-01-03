@@ -19,6 +19,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
+
 #include "dnsdist.hh"
 #include "dnsdist-ecs.hh"
 #include "sstuff.hh"
@@ -53,7 +54,7 @@
 #ifdef HAVE_SYSTEMD
 #include <systemd/sd-daemon.h>
 #endif
-
+#include "stubresolver.hh"
 #ifdef HAVE_PROTOBUF
 thread_local boost::uuids::random_generator t_uuidGenerator;
 #endif
@@ -94,6 +95,7 @@ std::vector<std::shared_ptr<DynBPFFilter> > g_dynBPFFilters;
 vector<ClientState *> g_frontends;
 GlobalStateHolder<pools_t> g_pools;
 size_t g_udpVectorSize{1};
+std::string g_resolver;
 
 bool g_snmpEnabled{false};
 bool g_snmpTrapsEnabled{false};
@@ -2153,7 +2155,7 @@ try
   
   if(g_locals.empty())
     g_locals.push_back(std::make_tuple(ComboAddress("127.0.0.1", 53), true, false, 0, "", std::set<int>()));
-
+  stubParseResolveConf(g_resolver);
   g_configurationDone = true;
 
   vector<ClientState*> toLaunch;

@@ -1,0 +1,3 @@
+[submodule "pdns/dnsdistdist/ext/h2o"]
+	path = pdns/dnsdistdist/ext/h2o
+	url = https://github.com/h2o/h2o.git

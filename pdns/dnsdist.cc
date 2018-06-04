@@ -386,8 +386,7 @@ static bool sendUDPResponse(int origFD, char* response, uint16_t responseLen, in
   return true;
 }
 
-
-static int pickBackendSocketForSending(DownstreamState* state)
+int pickBackendSocketForSending(DownstreamState* state)
 {
   return state->sockets[state->socketsOffset++ % state->sockets.size()];
 }
@@ -1263,8 +1262,8 @@ static void processUDPQuery(ClientState& cs, LocalHolders& holders, const struct
 #endif
 
     struct dnsheader* dh = reinterpret_cast<struct dnsheader*>(query);
-    queryId = ntohs(dh->id);
 
+    queryId = ntohs(dh->id);
     if (!checkQueryHeaders(dh)) {
       return;
     }

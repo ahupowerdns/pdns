@@ -406,6 +406,7 @@ struct DOHUnit
   std::string query;
   ComboAddress remote;
   ComboAddress dest;
+  uint16_t qtype;
 };
 
 

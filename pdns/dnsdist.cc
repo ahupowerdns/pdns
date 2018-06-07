@@ -434,18 +434,13 @@ try {
         char * response = packet;
         size_t responseSize = sizeof(packet);
 
-        cout<<"Got packet"<<endl;
-        
         if (got < (ssize_t) sizeof(dnsheader))
           continue;
 
         uint16_t responseLen = (uint16_t) got;
         queryId = dh->id;
-
-        cout<<"Did we have a state for "<<queryId<<"?"<<endl;
         
         if(queryId >= dss->idStates.size()) {
-          cout<<"Nope"<<endl;
           continue;
         }
 
@@ -453,7 +448,6 @@ try {
         int origFD = ids->origFD;
 
         if(origFD < 0 && !ids->du) { // duplicate
-          cout<<"origFD negative"<<endl;
           continue;
         }
 
@@ -464,10 +458,7 @@ try {
         */
         ids->age = 0;
 
-        cout<<"Checking if content matches"<<endl;
-        
         if (!responseContentMatches(response, responseLen, ids->qname, ids->qtype, ids->qclass, dss->remote)) {
-          cout<<"No match.."<<endl;
           continue;
         }
         int oldFD = ids->origFD.exchange(-1);
@@ -510,7 +501,7 @@ try {
         if (ids->packetCache && !ids->skipCache) {
           ids->packetCache->insert(ids->cacheKey, ids->subnet, ids->origFlags, ids->qname, ids->qtype, ids->qclass, response, responseLen, false, dh->rcode, ids->tempFailureTTL);
         }
-        cout<<(void*)ids->cs<<", "<<ids->cs->muted<<endl;
+
         if (ids->cs && !ids->cs->muted) {
 #ifdef HAVE_DNSCRYPT
           if (!encryptResponse(response, &responseLen, responseSize, false, ids->dnsCryptQuery, &dh, &dhCopy)) {
@@ -528,7 +519,6 @@ try {
             send(ids->du->rsock, &ids->du, sizeof(ids->du), 0);
           }
           else {
-            cout<<"Should send to normal socket"<<endl;
             sendUDPResponse(origFD, response, responseLen, ids->delayMsec, ids->destHarvested ? ids->origDest : empty, ids->origRemote);
           }
         }
@@ -1104,13 +1094,10 @@ bool processResponse(LocalStateHolder<vector<DNSDistResponseRuleAction> >& local
 
 static ssize_t udpClientSendRequestToBackend(DownstreamState* ss, const int sd, const char* request, const size_t requestLen, bool healthCheck=false)
 {
-  cout<<"Hiero"<<endl;
   ssize_t result;
 
   if (ss->sourceItf == 0) {
-    cout<<"just sent it"<<endl;
     result = send(sd, request, requestLen, 0);
-    cout<<"Result of sending: "<<result<<endl;
   }
   else {
     struct msghdr msgh;
@@ -2683,7 +2670,7 @@ try
     }
   }
 
-  thread dohthread(dohThread);
+  thread dohthread(dohThread, ComboAddress("127.0.0.1", 7890), "server.crt", "server.key");
   dohthread.detach();
   
   thread carbonthread(carbonDumpThread);

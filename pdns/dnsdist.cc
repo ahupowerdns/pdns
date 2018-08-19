@@ -2672,7 +2672,7 @@ try
   }
 
   for(auto& df : g_dohlocals) {
-    thread dohthread(dohThread, df->d_local, df->d_certFile, df->d_keyFile);
+    thread dohthread(dohThread, df->d_local, df->d_urls, df->d_certFile, df->d_keyFile);
     dohthread.detach();
   }
   

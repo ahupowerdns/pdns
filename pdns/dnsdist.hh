@@ -399,6 +399,7 @@ private:
 
 struct ClientState;
 struct st_h2o_req_t;
+
 struct DOHUnit
 {
   st_h2o_req_t* req;

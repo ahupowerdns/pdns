@@ -47,7 +47,7 @@ namespace po = boost::program_options;
 po::variables_map g_vm;
 
 ArgvMap& arg()
-{	
+{       
   static ArgvMap theArg;
   return theArg;
 }
@@ -220,29 +220,29 @@ try
     while(pr.getUDPPacket()) {
 
       if((ntohs(pr.d_udp->uh_dport)==5300 || ntohs(pr.d_udp->uh_sport)==5300 ||
-	  ntohs(pr.d_udp->uh_dport)==53   || ntohs(pr.d_udp->uh_sport)==53) &&
-	 pr.d_len > 12) {
-	try {
-	  if((pr.d_ip->ip_v == 4 && !doIPv4) || (pr.d_ip->ip_v == 6 && !doIPv6))
-	    continue;
-	  if(pr.d_ip->ip_v == 4) {
-	    uint16_t frag = ntohs(pr.d_ip->ip_off);
-	    if((frag & IP_MF) || (frag & IP_OFFMASK)) { // more fragments or IS a fragment
-	      fragmented++;
-	      continue;
-	    }
-	  }
-	  uint16_t qtype;
-	  DNSName qname((const char*)pr.d_payload, pr.d_len, 12, false, &qtype);
-	  struct dnsheader header;
-	  memcpy(&header, (struct dnsheader*)pr.d_payload, 12);
+          ntohs(pr.d_udp->uh_dport)==53   || ntohs(pr.d_udp->uh_sport)==53) &&
+         pr.d_len > 12) {
+        try {
+          if((pr.d_ip->ip_v == 4 && !doIPv4) || (pr.d_ip->ip_v == 6 && !doIPv6))
+            continue;
+          if(pr.d_ip->ip_v == 4) {
+            uint16_t frag = ntohs(pr.d_ip->ip_off);
+            if((frag & IP_MF) || (frag & IP_OFFMASK)) { // more fragments or IS a fragment
+              fragmented++;
+              continue;
+            }
+          }
+          uint16_t qtype;
+          DNSName qname((const char*)pr.d_payload, pr.d_len, 12, false, &qtype);
+          struct dnsheader header;
+          memcpy(&header, (struct dnsheader*)pr.d_payload, 12);
 
-	  if(haveRDFilter && header.rd != rdFilter) {
-	    rdFilterMismatch++;
-	    continue;
-	  }
+          if(haveRDFilter && header.rd != rdFilter) {
+            rdFilterMismatch++;
+            continue;
+          }
 
-	  if(!header.qr) {
+          if(!header.qr) {
             uint16_t udpsize, z;
             if(getEDNSUDPPayloadSizeAndZ((const char*)pr.d_payload, pr.d_len, &udpsize, &z)) {
               edns++;
@@ -255,119 +255,122 @@ try
             }
           }
 
-	  if(pr.d_ip->ip_v == 4) 
-	    ++ipv4DNSPackets;
-	  else
-	    ++ipv6DNSPackets;
+          if(pr.d_ip->ip_v == 4) 
+            ++ipv4DNSPackets;
+          else
+            ++ipv6DNSPackets;
         
-	  if(pr.d_pheader.ts.tv_sec != lastsec) {
-	    LiveCounts lc;
-	    if(lastsec) {
-	      lc.questions = queries;
-	      lc.answers = answers;
-	      lc.outstanding = liveQuestions(); 
+          if(pr.d_pheader.ts.tv_sec != lastsec) {
+            LiveCounts lc;
+            if(lastsec) {
+              lc.questions = queries;
+              lc.answers = answers;
+              lc.outstanding = liveQuestions(); 
 
-	      LiveCounts diff = lc - lastcounts;
-	      pcounts.push_back(make_pair(pr.d_pheader.ts.tv_sec, diff));
+              LiveCounts diff = lc - lastcounts;
+              pcounts.push_back(make_pair(pr.d_pheader.ts.tv_sec, diff));
 
-	    }
-	    lastsec = pr.d_pheader.ts.tv_sec;
-	    lastcounts = lc;
-	  }
+            }
+            lastsec = pr.d_pheader.ts.tv_sec;
+            lastcounts = lc;
+          }
 
-	  lowestTime=min((time_t)lowestTime,  (time_t)pr.d_pheader.ts.tv_sec);
-	  highestTime=max((time_t)highestTime, (time_t)pr.d_pheader.ts.tv_sec);
+          lowestTime=min((time_t)lowestTime,  (time_t)pr.d_pheader.ts.tv_sec);
+          highestTime=max((time_t)highestTime, (time_t)pr.d_pheader.ts.tv_sec);
 
-	  QuestionIdentifier qi=QuestionIdentifier::create(pr.getSource(), pr.getDest(), header, qname, qtype);
+          QuestionIdentifier qi=QuestionIdentifier::create(pr.getSource(), pr.getDest(), header, qname, qtype);
 
-	  if(!header.qr) { // question
-	    //	    cout<<"Query "<<qi<<endl;
-	    if(!header.rd)
-	      nonRDQueries++;
-	    queries++;
+          if(!header.qr) { // question
+            //      cout<<"Query "<<qi<<endl;
+            if(!header.rd)
+              nonRDQueries++;
+            queries++;
 
-	    ComboAddress rem = pr.getSource();
-	    rem.sin4.sin_port=0;
-	    requestors[rem]++;
+            ComboAddress rem = pr.getSource();
+            rem.sin4.sin_port=0;
+            requestors[rem]++;
 
             QuestionData& qd=statmap[qi];
           
-	    if(!qd.d_firstquestiontime.tv_sec)
-	      qd.d_firstquestiontime=pr.d_pheader.ts;
-	    else {
-	      auto delta=makeFloat(pr.d_pheader.ts - qd.d_firstquestiontime);
-	      //	      cout<<"Reuse of "<<qi<<", delta t="<<delta<<", count="<<qd.d_qcount<<endl;
-	      if(delta > 2.0) {
-		//		cout<<"Resetting old entry for "<<qi<<", too old"<<endl;
-		qd.d_qcount=0;
-		qd.d_answercount=0;
-		qd.d_firstquestiontime=pr.d_pheader.ts;
-	      }
-	    }
-	    if(qd.d_qcount++)
+            if(!qd.d_firstquestiontime.tv_sec)
+              qd.d_firstquestiontime=pr.d_pheader.ts;
+            else {
+              auto delta=makeFloat(pr.d_pheader.ts - qd.d_firstquestiontime);
+              //              cout<<"Reuse of "<<qi<<", delta t="<<delta<<", count="<<qd.d_qcount<<endl;
+              if(delta > 2.0) {
+                //              cout<<"Resetting old entry for "<<qi<<", too old"<<endl;
+                qd.d_qcount=0;
+                qd.d_answercount=0;
+                qd.d_firstquestiontime=pr.d_pheader.ts;
+              }
+            }
+            if(qd.d_qcount++)
               reuses++;
-	  }
-	  else  {  // answer
-	    //	    cout<<"Response "<<qi<<endl;
-	    rcodes[header.rcode]++;
-	    answers++;
-	    if(header.rd && !header.ra) {
-	      rdNonRAAnswers++;
-	      rdnonra.insert(pr.getDest());
-	    }
-	  
-	    if(header.ra) {
-	      ComboAddress rem = pr.getDest();
-	      rem.sin4.sin_port=0;
-	      recipients.insert(rem);	  
-	    }
+          }
+          else  {  // answer
+            //      cout<<"Response "<<qi<<endl;
+            rcodes[header.rcode]++;
+            answers++;
+            if(header.rd && !header.ra) {
+              rdNonRAAnswers++;
+              rdnonra.insert(pr.getDest());
+            }
+          
+            if(header.ra) {
+              ComboAddress rem = pr.getDest();
+              rem.sin4.sin_port=0;
+              recipients.insert(rem);     
+            }
 
-	    QuestionData& qd=statmap[qi];
-	    if(!qd.d_qcount) {
-	      //	      cout<<"Untracked answer: "<<qi<<endl;
-	      untracked++;
-	    }
+            auto qd = statmap.find(qi);
+            if(qd == statmap.end())
+              qd = statmap.insert({qi,QuestionData()}).first;
+              
+            if(!qd->second.d_qcount) {
+              //              cout<<"Untracked answer: "<<qi<<endl;
+              untracked++;
+            }
 
-	    qd.d_answercount++;
+            qd->second.d_answercount++;
 
-	    if(qd.d_qcount) {
-	      uint32_t usecs= (pr.d_pheader.ts.tv_sec - qd.d_firstquestiontime.tv_sec) * 1000000 +  
-		(pr.d_pheader.ts.tv_usec - qd.d_firstquestiontime.tv_usec) ;
+            if(qd->second.d_qcount) {
+              uint32_t usecs= (pr.d_pheader.ts.tv_sec - qd->second.d_firstquestiontime.tv_sec) * 1000000 +  
+                (pr.d_pheader.ts.tv_usec - qd->second.d_firstquestiontime.tv_usec) ;
 
-	      //	      cout<<"Usecs for "<<qi<<": "<<usecs<<endl;
+              //              cout<<"Usecs for "<<qi<<": "<<usecs<<endl;
               if(!noservfailstats || header.rcode != 2)
                 cumul[usecs]++;
             
-	      if(header.rcode != 0 && header.rcode!=3) 
-		errorresult++;
-	      ComboAddress rem = pr.getDest();
-	      rem.sin4.sin_port=0;
+              if(header.rcode != 0 && header.rcode!=3) 
+                errorresult++;
+              ComboAddress rem = pr.getDest();
+              rem.sin4.sin_port=0;
 
-	      if(doServFailTree)
-		root.submit(qname, header.rcode, rem);
-	    }
+              if(doServFailTree)
+                root.submit(qname, header.rcode, rem);
+            }
 
-	    if(!qd.d_qcount || qd.d_qcount == qd.d_answercount) {
-	      //	      cout<<"Clearing state for "<<qi<<endl<<endl;
-	      statmap.erase(qi);
-	    }
-	    else
-	      ;//	      cout<<"State for qi remains open, qcount="<<qd.d_qcount<<", answercount="<<qd.d_answercount<<endl;
-	     
-	  }
-	}
-	catch(std::exception& e) {
-	  if(verbose)
-	    cout<<"error parsing packet: "<<e.what()<<endl;
+            if(!qd->second.d_qcount || qd->second.d_qcount == qd->second.d_answercount) {
+              //              cout<<"Clearing state for "<<qi<<endl<<endl;
+              statmap.erase(qd);
+            }
+            else
+              ;//             cout<<"State for qi remains open, qcount="<<qd.d_qcount<<", answercount="<<qd.d_answercount<<endl;
+             
+          }
+        }
+        catch(std::exception& e) {
+          if(verbose)
+            cout<<"error parsing packet: "<<e.what()<<endl;
 
-	  if(pw)
-	    pw->write();
-	  parsefail++;
-	  continue;
-	}
+          if(pw)
+            pw->write();
+          parsefail++;
+          continue;
+        }
       }
       else { // non-DNS ip
-	nonDNSIP++;
+        nonDNSIP++;
       }
     }
     cout<<"PCAP contained "<<pr.d_correctpackets<<" correct packets, "<<pr.d_runts<<" runts, "<< pr.d_oversized<<" oversize, "<<pr.d_nonetheripudp<<" non-UDP.\n";
@@ -387,11 +390,11 @@ try
   cout<<"Ignored fragment packets: "<<fragmented<<endl;
   cout<<"Dropped DNS packets based on recursion-desired filter: "<<rdFilterMismatch<<endl;
   cout<<"DNS IPv4: "<<ipv4DNSPackets<<" packets, IPv6: "<<ipv6DNSPackets<<" packets"<<endl;
-  cout<<"Questions: "<<queries<<", answers: "<<answers<<endl;
+  cout<<"Questions: "<<queries<<" ("<<queries/(highestTime-lowestTime)<< " qps), answers: "<<answers<<endl;
   cout<<"Reuses of same state entry: "<<reuses<<endl;
   unsigned int unanswered=0;
 
-
+  cout<<"At close, "<<statmap.size()<<" queries still being tracked"<<endl;
   //  ofstream openf("openf");
   for(statmap_t::const_iterator i=statmap.begin(); i!=statmap.end(); ++i) {
     if(!i->second.d_answercount) {
@@ -496,12 +499,14 @@ try
     counthisto[rem.second].push_back(rem.first);
   }
 
-  ofstream chfile(g_vm["stats-dir"].as<string>()+"/chfile");
+  ofstream freqhisto(g_vm["stats-dir"].as<string>()+"/freqhisto");
+  uint32_t chsum=0;
   for(const auto& ch : counthisto) {
-    chfile << ch.first << '\t' << ch.second.size() << '\t';
+    chsum += ch.second.size();
+    freqhisto << ch.first << '\t' << ch.second.size() << '\t' << chsum << '\t';
     for(const auto& a : ch.second)
-      chfile << ' ' << a.toString();
-    chfile <<'\n';
+      freqhisto << ' ' << a.toString();
+    freqhisto <<'\n';
   }
   
   vector<ComboAddress> diff;

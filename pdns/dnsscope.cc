@@ -29,8 +29,7 @@
 #include "dnspcap.hh"
 #include "dnsparser.hh"
 #include "dnsname.hh"
-#include <boost/tuple/tuple.hpp>
-#include <boost/tuple/tuple_comparison.hpp>
+#include <unordered_map>
 #include <map>
 #include <set>
 #include <fstream>
@@ -205,7 +204,8 @@ try
   time_t lowestTime=2000000000, highestTime=0;
   time_t lastsec=0;
   LiveCounts lastcounts;
-  std::unordered_set<ComboAddress, ComboAddress::addressOnlyHash> requestors, recipients, rdnonra;
+  std::unordered_set<ComboAddress, ComboAddress::addressOnlyHash> recipients, rdnonra;
+  std::unordered_map<ComboAddress, uint32_t, ComboAddress::addressOnlyHash> requestors;
   typedef vector<pair<time_t, LiveCounts> > pcounts_t;
   pcounts_t pcounts;
   OPTRecordContent::report();
@@ -288,7 +288,7 @@ try
 
 	    ComboAddress rem = pr.getSource();
 	    rem.sin4.sin_port=0;
-	    requestors.insert(rem);	  
+	    requestors[rem]++;
 
             QuestionData& qd=statmap[qi];
           
@@ -476,7 +476,7 @@ try
     cout<<"Average non-late response time: "<<tottime/totpairs<<" usec"<<endl;
 
   if(!g_vm["load-stats"].as<string>().empty()) {
-    ofstream load(g_vm["load-stats"].as<string>().c_str());
+    ofstream load(g_vm["stats-dir"].as<string>()+"/"+g_vm["load-stats"].as<string>().c_str());
     if(!load) 
       throw runtime_error("Error writing load statistics to "+g_vm["load-stats"].as<string>());
     for(pcounts_t::value_type& val :  pcounts) {
@@ -486,20 +486,41 @@ try
 
 
   cout<<"Saw questions from "<<requestors.size()<<" distinct remotes, answers to "<<recipients.size()<<endl;
-  ofstream remotes("remotes");
-  for(const ComboAddress& rem :  requestors) {
-    remotes<<rem.toString()<<'\n';
+  ofstream remotes(g_vm["stats-dir"].as<string>()+"/remotes");
+  std::vector<ComboAddress> reqonly, recipientsonly;
+  reqonly.reserve(requestors.size());
+  std::map<uint32_t, vector<ComboAddress> > counthisto;
+  for(const auto& rem :  requestors) {
+    remotes<<rem.first.toString()<<'\t'<<rem.second<<'\n';
+    reqonly.push_back(rem.first);
+    counthisto[rem.second].push_back(rem.first);
   }
 
+  ofstream chfile(g_vm["stats-dir"].as<string>()+"/chfile");
+  for(const auto& ch : counthisto) {
+    chfile << ch.first << '\t' << ch.second.size() << '\t';
+    for(const auto& a : ch.second)
+      chfile << ' ' << a.toString();
+    chfile <<'\n';
+  }
+  
   vector<ComboAddress> diff;
-  set_difference(requestors.begin(), requestors.end(), recipients.begin(), recipients.end(), back_inserter(diff), ComboAddress::addressOnlyLessThan());
+
+
+  sort(reqonly.begin(), reqonly.end(), ComboAddress::addressOnlyLessThan());
+  recipientsonly.reserve(recipients.size());
+  for(const auto& r : recipients)
+    recipientsonly.push_back(r);
+  sort(reqonly.begin(), reqonly.end(), ComboAddress::addressOnlyLessThan());
+  sort(recipientsonly.begin(), recipientsonly.end(), ComboAddress::addressOnlyLessThan());
+  set_difference(reqonly.begin(), reqonly.end(), recipientsonly.begin(), recipientsonly.end(), back_inserter(diff), ComboAddress::addressOnlyLessThan());
   cout<<"Saw "<<diff.size()<<" unique remotes asking questions, but not getting RA answers"<<endl;
   
-  ofstream ignored("ignored");
+  ofstream ignored(g_vm["stats-dir"].as<string>()+"/"+"ignored");
   for(const ComboAddress& rem :  diff) {
     ignored<<rem.toString()<<'\n';
   }
-  ofstream rdnonrafs("rdnonra");
+  ofstream rdnonrafs(g_vm["stats-dir"].as<string>()+"/"+"rdnonra");
   for(const ComboAddress& rem :  rdnonra) {
     rdnonrafs<<rem.toString()<<'\n';
   }

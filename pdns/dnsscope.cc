@@ -165,7 +165,7 @@ try
     cerr<<"dnsscope "<<VERSION<<endl;
     exit(0);
   }
-
+  
   if(files.empty() || g_vm.count("help")) {
     cerr<<"Syntax: dnsscope filename.pcap [filenam2.pcap...]"<<endl;
     cout << desc << endl;
@@ -175,7 +175,7 @@ try
   StatNode root;
 
   bool verbose = g_vm.count("verbose");
-
+  bool doLoadStats = !g_vm["load-stats"].as<string>().empty();
   bool haveRDFilter=0, rdFilter=0;
   if(g_vm.count("rd")) {
     rdFilter = g_vm["rd"].as<bool>();
@@ -262,7 +262,7 @@ try
         
           if(pr.d_pheader.ts.tv_sec != lastsec) {
             LiveCounts lc;
-            if(lastsec) {
+            if(lastsec && doLoadStats) {
               lc.questions = queries;
               lc.answers = answers;
               lc.outstanding = liveQuestions(); 
@@ -478,7 +478,7 @@ try
   if(totpairs)
     cout<<"Average non-late response time: "<<tottime/totpairs<<" usec"<<endl;
 
-  if(!g_vm["load-stats"].as<string>().empty()) {
+  if(doLoadStats) {
     ofstream load(g_vm["stats-dir"].as<string>()+"/"+g_vm["load-stats"].as<string>().c_str());
     if(!load) 
       throw runtime_error("Error writing load statistics to "+g_vm["load-stats"].as<string>());

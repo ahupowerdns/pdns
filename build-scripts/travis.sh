@@ -552,7 +552,7 @@ test_auth() {
 
   run "./timestamp ./start-test-stop 5300 tinydns"
 
-  run "./timestamp ./start-test-stop 5300 lmdb"
+  run "./timestamp ./start-test-stop 5300 lmdb-nodnssec"
 
   run "rm tests/ent-asterisk/fail.nsec"
 

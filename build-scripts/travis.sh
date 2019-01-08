@@ -531,7 +531,7 @@ test_auth() {
   # run "./timestamp ./start-test-stop 5300 gpgsql-nsec3-optout-both"
   # run "./timestamp ./start-test-stop 5300 gpgsql-nsec3-narrow"
 
-  # run "./timestamp ./start-test-stop 5300 gsqlite3-nodnssec-both"
+  run "./timestamp ./start-test-stop 5300 gsqlite3-nodnssec-both"
   # run "./timestamp ./start-test-stop 5300 gsqlite3-both"
   # run "./timestamp ./start-test-stop 5300 gsqlite3-nsec3-both"
   # run "./timestamp ./start-test-stop 5300 gsqlite3-nsec3-optout-both"
@@ -581,7 +581,7 @@ test_auth() {
   # run "./timestamp ./start-test-stop 5300 gpgsql-nsec3-optout-both"
   # run "./timestamp ./start-test-stop 5300 gpgsql-nsec3-narrow"
 
-  # run "./timestamp ./start-test-stop 5300 gsqlite3-nodnssec-both"
+  run "./timestamp ./start-test-stop 5300 gsqlite3-nodnssec-both"
   # run "./timestamp ./start-test-stop 5300 gsqlite3-both"
   # run "./timestamp ./start-test-stop 5300 gsqlite3-nsec3-both"
   # run "./timestamp ./start-test-stop 5300 gsqlite3-nsec3-optout-both"

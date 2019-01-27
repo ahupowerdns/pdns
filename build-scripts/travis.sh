@@ -552,10 +552,10 @@ test_auth() {
 
   run "./timestamp ./start-test-stop 5300 tinydns"
 
-  run "./timestamp ./start-test-stop 5300 lmdb-nodnssec"
-  run "./timestamp ./start-test-stop 5300 lmdb"
-  run "./timestamp ./start-test-stop 5300 lmdb-nsec3"
-  run "./timestamp ./start-test-stop 5300 lmdb-nsec3-optout"
+  run "./timestamp ./start-test-stop 5300 lmdb-nodnssec-both"
+  run "./timestamp ./start-test-stop 5300 lmdb-both"
+  run "./timestamp ./start-test-stop 5300 lmdb-nsec3-both"
+  run "./timestamp ./start-test-stop 5300 lmdb-nsec3-optout-both"
 
   run "rm tests/ent-asterisk/fail.nsec"
 
@@ -593,9 +593,10 @@ test_auth() {
   run "./timestamp ./start-test-stop 5300 lua2"
   run "./timestamp ./start-test-stop 5300 lua2-dnssec"
 
-  run "./timestamp ./start-test-stop 5300 lmdb"
-  run "./timestamp ./start-test-stop 5300 lmdb-nodnssec"
-  run "./timestamp ./start-test-stop 5300 lmdb-nsec3"
+  run "./timestamp ./start-test-stop 5300 lmdb-both"
+  run "./timestamp ./start-test-stop 5300 lmdb-nodnssec-both"
+  run "./timestamp ./start-test-stop 5300 lmdb-nsec3-both"
+  run "./timestamp ./start-test-stop 5300 lmdb-nsec3-optout-both"
 
   run "cd .."
 
